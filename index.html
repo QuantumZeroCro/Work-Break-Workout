@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work Break Workout</title>
+  <meta name="description" content="A personal workout timer that prompts exercises throughout your workday, tracks your daily log, and works offline as a single HTML file." />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0f11;
+    --surface: #16181c;
+    --surface2: #1e2128;
+    --accent: #3b82f6;
+    --accent2: #60a5fa;
+    --text: #f0f2f5;
+    --muted: #6b7280;
+    --success: #10b981;
+    --warn: #f59e0b;
+    --ring-size: 260px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 24px 16px 40px;
+    gap: 28px;
+  }
+
+  header {
+    text-align: center;
+  }
+  header h1 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ── Ring timer ── */
+  .ring-container {
+    position: relative;
+    width: var(--ring-size);
+    height: var(--ring-size);
+    flex-shrink: 0;
+  }
+  .ring-svg {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+  .ring-track {
+    fill: none;
+    stroke: var(--surface2);
+    stroke-width: 8;
+  }
+  .ring-progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear, stroke 0.4s;
+  }
+  .ring-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .ring-label {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ring-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+  .ring-sublabel {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* ── Exercise card ── */
+  .exercise-card {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 16px;
+    padding: 24px 28px;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .exercise-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .exercise-card.active::before { opacity: 1; }
+
+  .ex-category {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 8px;
+  }
+  .ex-name {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 6px;
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ex-note {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* ── Controls ── */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    padding: 12px 28px;
+  }
+  .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-ghost {
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 13px;
+    padding: 12px 18px;
+    border: 1px solid var(--surface2);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ── Queue ── */
+  .queue-section {
+    width: 100%;
+    max-width: 420px;
+  }
+  .queue-title {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .queue-item {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+  .queue-item.next {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  .queue-item .q-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--surface2);
+    min-width: 20px;
+  }
+  .queue-item.next .q-num { color: var(--accent); }
+
+  /* ── Settings panel ── */
+  .settings-panel {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 16px;
+    padding: 20px 24px;
+    width: 100%;
+    max-width: 420px;
+    display: none;
+  }
+  .settings-panel.open { display: block; }
+  .settings-panel h3 {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 12px;
+  }
+  .setting-row label { font-size: 13px; color: var(--text); }
+  .setting-row input[type=range] {
+    accent-color: var(--accent);
+    flex: 1;
+  }
+  .setting-row span {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--accent2);
+    min-width: 40px;
+    text-align: right;
+  }
+
+  /* ── Log day tabs ── */
+  .log-days {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .log-day-tab {
+    font-size: 11px; font-family: 'Space Mono', monospace;
+    background: var(--surface); border: 1px solid var(--surface2);
+    color: var(--muted); border-radius: 6px; padding: 5px 10px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .log-day-tab:hover { border-color: var(--muted); color: var(--text); }
+  .log-day-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .log-day-tab .tab-count { font-size: 9px; opacity: 0.7; margin-left: 4px; }
+
+  /* ── Notification banner ── */
+  .notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--accent);
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 999;
+    white-space: nowrap;
+  }
+  .notification.show { transform: translateX(-50%) translateY(0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  }
+
+  /* ── Done button ── */
+  .btn-done {
+    background: var(--success);
+    color: #fff;
+    font-size: 14px;
+    padding: 12px 28px;
+  }
+  .btn-done:hover { background: #34d399; transform: translateY(-1px); }
+  .btn-done:active { transform: translateY(0); }
+  .btn-done:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+  /* ── Daily log ── */
+  .log-section {
+    width: 100%;
+    max-width: 420px;
+  }
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .log-title {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .log-clear {
+    font-size: 10px;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .log-clear:hover { color: var(--text); }
+  .log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .log-item {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 8px;
+    padding: 9px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  .log-item-left { display: flex; align-items: center; gap: 10px; }
+  .log-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .log-name { color: var(--text); }
+  .log-time { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); }
+  .log-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 14px 0; }
+  .log-detail { font-size: 10px; color: var(--muted); margin-left: 6px; }
+
+  /* ── Workout input modal ── */
+  .modal-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 20px;
+    padding: 28px 24px;
+    width: 90%; max-width: 380px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .modal h3 {
+    font-size: 16px; font-weight: 700; color: var(--text);
+  }
+  .modal-exercise-name {
+    font-size: 12px; color: var(--accent2); letter-spacing: 0.1em; text-transform: uppercase;
+    margin-top: -8px;
+  }
+  .modal-fields { display: flex; flex-direction: column; gap: 12px; }
+  .modal-field { display: flex; flex-direction: column; gap: 5px; }
+  .modal-field label { font-size: 12px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .modal-field input {
+    background: var(--surface2);
+    border: 1px solid #2a2d35;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 15px;
+    padding: 10px 12px;
+    outline: none;
+    width: 100%;
+  }
+  .modal-field input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* ── Exercise editor ── */
+  .editor-section {
+    width: 100%; max-width: 420px;
+  }
+  .editor-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+  }
+  .editor-title {
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+  }
+  .editor-list { display: flex; flex-direction: column; gap: 5px; max-height: 320px; overflow-y: auto; }
+  .editor-item {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px;
+  }
+  .editor-item-cat {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600;
+    white-space: nowrap; color: #fff;
+  }
+  .editor-item-name { flex: 1; color: var(--text); }
+  .editor-item-note { font-size: 11px; color: var(--muted); flex: 1; }
+  .editor-btn-del {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 15px; padding: 2px 5px; border-radius: 4px; line-height: 1;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .editor-btn-del:hover { color: #f43f5e; }
+  .editor-add-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .editor-add-row input, .editor-add-row select {
+    background: var(--surface2);
+    border: 1px solid #2a2d35;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+  }
+  .editor-add-row input:focus, .editor-add-row select:focus { border-color: var(--accent); }
+  .editor-add-row select option { background: var(--surface2); }
+  .editor-add-btn {
+    grid-column: 1 / -1;
+    background: var(--accent); color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600; font-size: 13px;
+    padding: 9px; border: none; border-radius: 8px; cursor: pointer;
+  }
+  .editor-add-btn:hover { background: var(--accent2); }
+
+  /* ── Manual log picker ── */
+  .picker-search {
+    background: var(--surface2);
+    border: 1px solid #2a2d35;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    width: 100%;
+  }
+  .picker-search:focus { border-color: var(--accent); }
+  .picker-list {
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: 220px; overflow-y: auto; margin-top: 4px;
+  }
+  .picker-item {
+    background: var(--surface2);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 9px 12px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--text);
+    transition: border-color 0.12s;
+  }
+  .picker-item:hover { border-color: var(--accent); }
+  .picker-item.done-today { opacity: 0.45; }
+  .picker-item.done-today::after { content: '✓'; color: var(--success); margin-left: auto; font-size: 11px; }
+
+  /* ── Log again button on log entries ── */
+  .log-again {
+    background: none; border: 1px solid var(--surface2);
+    color: var(--muted); font-size: 10px;
+    padding: 2px 7px; border-radius: 20px; cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif;
+    margin-left: 6px; white-space: nowrap;
+  }
+  .log-again:hover { border-color: var(--accent); color: var(--accent2); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Work Break Workout</h1>
+</header>
+
+<!-- Ring timer -->
+<div class="ring-container">
+  <svg class="ring-svg" viewBox="0 0 260 260">
+    <circle class="ring-track" cx="130" cy="130" r="118"/>
+    <circle class="ring-progress" id="ringProgress" cx="130" cy="130" r="118"/>
+  </svg>
+  <div class="ring-inner">
+    <span class="ring-label" id="ringLabel">next exercise in</span>
+    <span class="ring-time" id="ringTime">30:00</span>
+    <span class="ring-sublabel" id="ringSubLabel">press start</span>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-value" id="statDone">0</div>
+    <div class="stat-label">Done today</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" id="statRemaining">—</div>
+    <div class="stat-label">Remaining</div>
+  </div>
+</div>
+
+<!-- Exercise card -->
+<div class="exercise-card" id="exerciseCard">
+  <div class="ex-category" id="exCategory">Strength</div>
+  <div class="ex-name" id="exName">Ready?</div>
+  <div class="ex-note" id="exNote">Hit Start to begin your session</div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="btn-primary" id="btnStart" onclick="toggleTimer()">Start Session</button>
+  <button class="btn-done" id="btnDone" onclick="doneExercise()" disabled>✓ Done</button>
+  <button class="btn-ghost" onclick="skipExercise()">Skip →</button>
+  <button class="btn-ghost" onclick="toggleSettings()">⚙ Settings</button>
+  <button class="btn-ghost" onclick="toggleEditor()">✎ Exercises</button>
+  <button class="btn-ghost" onclick="openManualLog()">＋ Log</button>
+</div>
+
+<!-- Settings -->
+<div class="settings-panel" id="settingsPanel">
+  <h3>Settings</h3>
+  <div class="setting-row">
+    <label>Break interval</label>
+    <input type="range" id="intervalSlider" min="10" max="60" value="30" step="5" oninput="updateInterval(this.value)">
+    <span id="intervalVal">30 min</span>
+  </div>
+  <div class="setting-row">
+    <label>Rest duration</label>
+    <input type="range" id="restSlider" min="10" max="300" value="30" step="5" oninput="updateRest(this.value)">
+    <span id="restVal">30 sec</span>
+  </div>
+  <div class="setting-row">
+    <label>Shuffle exercises</label>
+    <input type="checkbox" id="shuffleCheck" checked onchange="rebuildQueue();saveState()">
+  </div>
+</div>
+
+<!-- Queue -->
+<div class="queue-section">
+  <div class="queue-title">Up next</div>
+  <div class="queue-list" id="queueList"></div>
+</div>
+
+<!-- Daily log -->
+<div class="log-section">
+  <div class="log-header">
+    <span class="log-title">Log</span>
+    <button class="log-clear" onclick="clearLog()">clear</button>
+  </div>
+  <div class="log-days" id="logDays"></div>
+  <div class="log-list" id="logList"><div class="log-empty">No exercises yet today</div></div>
+</div>
+
+<!-- Exercise editor -->
+<div class="editor-section" id="editorSection" style="display:none">
+  <div class="editor-header">
+    <span class="editor-title">Exercise list</span>
+    <button class="log-clear" onclick="toggleEditor()">done</button>
+  </div>
+  <div class="editor-list" id="editorList"></div>
+  <div class="editor-add-row">
+    <input id="newExName" placeholder="Exercise name" />
+    <select id="newExCat">
+      <option>Cardio</option><option>Core</option><option>Pushing</option>
+      <option>Pulling</option><option>Legs</option><option>Back</option>
+      <option>Mobility</option><option>Grip</option><option>Skill</option>
+    </select>
+    <input id="newExNote" placeholder="Note (optional)" style="grid-column:1/-1"/>
+    <button class="editor-add-btn" onclick="addExercise()">+ Add exercise</button>
+  </div>
+</div>
+
+<!-- Workout input modal -->
+<div class="modal-backdrop" id="workoutModal" onclick="if(event.target===this)closeWorkoutModal(false)">
+  <div class="modal">
+    <h3>Log your effort</h3>
+    <div class="modal-exercise-name" id="modalExName"></div>
+    <div class="modal-fields">
+      <div class="modal-field">
+        <label>Reps / duration</label>
+        <input type="text" id="modalReps" placeholder="e.g. 12 or 45s" />
+      </div>
+      <div class="modal-field">
+        <label>Sets</label>
+        <input type="number" id="modalSets" placeholder="e.g. 3" min="1" max="20" value="1" />
+      </div>
+      <div class="modal-field">
+        <label>Weight (kg) — optional</label>
+        <input type="number" id="modalWeight" placeholder="e.g. 20" min="0" step="0.5" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" style="font-size:13px;padding:10px 18px" onclick="closeWorkoutModal(false)">Skip logging</button>
+      <button class="btn-done" style="font-size:13px;padding:10px 20px" onclick="closeWorkoutModal(true)">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual log picker modal -->
+<div class="modal-backdrop" id="manualLogModal" onclick="if(event.target===this)closeManualLog()">
+  <div class="modal">
+    <h3>Log exercise</h3>
+    <input class="picker-search" id="pickerSearch" placeholder="Search exercises…" oninput="filterPicker(this.value)" />
+    <div class="picker-list" id="pickerList"></div>
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+const DEFAULT_EXERCISES = [
+  { name: "Jumping Jacks",            category: "Cardio",     note: "Full power, until failure" },
+  { name: "Mountain Climbers",        category: "Cardio",     note: "Drive those knees in fast" },
+  { name: "Stair Climbing",            category: "Cardio",     note: "Up and down fast, until failure" },
+  { name: "World's Greatest Stretch", category: "Mobility",   note: "Hold 30s each side" },
+  { name: "Cat Cow",                  category: "Mobility",   note: "Slow, breathe through it" },
+  { name: "Twist",                    category: "Mobility",   note: "15s each side" },
+  { name: "Dead Hang",                category: "Grip",       note: "Hold as long as possible" },
+  { name: "Pull Ups",                 category: "Pulling",    note: "Max reps" },
+  { name: "Pull Up Hold",             category: "Pulling",    note: "Hold at top, chin over bar" },
+  { name: "Chin Ups",                 category: "Pulling",    note: "Max reps, supinated grip" },
+  { name: "Chin Up Hold",             category: "Pulling",    note: "Hold at top position" },
+  { name: "Hand Grip",                category: "Grip",       note: "50 reps each hand" },
+  { name: "Overhead Press",           category: "Pushing",    note: "Full range, controlled" },
+  { name: "Triceps Extension",        category: "Pushing",    note: "Slow on the way down" },
+  { name: "Squats",                   category: "Legs",       note: "Ass to grass, full depth" },
+  { name: "Lunges",                   category: "Legs",       note: "25 each leg, alternate" },
+  { name: "Calf Raises",              category: "Legs",       note: "Slow eccentric, max range" },
+  { name: "Glute Bridge",             category: "Legs",       note: "Squeeze at top, hold 1s" },
+  { name: "Bridge",                   category: "Core",       note: "10 reps, slow and controlled" },
+  { name: "Deep Squat Hold",          category: "Mobility",   note: "Hold as long as possible" },
+  { name: "Wall Sit",                 category: "Legs",       note: "Hold until failure, 90°" },
+  { name: "Bicycle Crunches",         category: "Core",       note: "Slow and deliberate" },
+  { name: "Standing Bicycle Crunches",category: "Core",       note: "Drive elbow to knee" },
+  { name: "Lying Leg Raise",          category: "Core",       note: "Lower back pressed down" },
+  { name: "Sit Ups",                  category: "Core",       note: "Full range of motion" },
+  { name: "Russian Twist",            category: "Core",       note: "Feet off ground, rotate fully" },
+  { name: "Side Bridge",              category: "Core",       note: "25 each side, stay tight" },
+  { name: "Plank",                    category: "Core",       note: "Hold as long as possible" },
+  { name: "Side Bend",                category: "Core",       note: "15 each side, slow" },
+  { name: "Push Ups",                 category: "Pushing",    note: "Max reps, chest to floor" },
+  { name: "Handstand",                category: "Skill",      note: "Hold against wall, 30s" },
+  { name: "Back Extension",           category: "Back",       note: "Hold at top 1s each rep" },
+  { name: "Superman",                 category: "Back",       note: "Hold 2s at top" },
+  { name: "Cobra Stretch",            category: "Mobility",   note: "Hold 30s, breathe" },
+  { name: "Butterfly Stretch",        category: "Mobility",   note: "Hold 30s, press knees down" },
+  { name: "Splits",                   category: "Mobility",   note: "Hold 30s, go as far as you can" },
+  { name: "90/90 Hip Stretch",        category: "Mobility",   note: "Hold 30s each side" },
+  { name: "Lying Stretch Twist",      category: "Mobility",   note: "60s total, both sides" },
+  { name: "Pike Push Up",             category: "Pushing",    note: "Max reps, hips high" },
+  { name: "Nordic Curl",              category: "Legs",       note: "Hook feet, lower as slow as you can" },
+  { name: "Neck CARs",                category: "Mobility",   note: "5 slow circles each direction" },
+  { name: "Hollow Body Hold",         category: "Core",       note: "Hold as long as possible, lower back flat" },
+  { name: "Bicep Curl",               category: "Pulling",    note: "Max reps, full range, slow eccentric" },
+];
+
+// Load custom exercise list from localStorage (or fall back to defaults)
+let EXERCISES = (() => {
+  try {
+    const raw = localStorage.getItem('wbw_exercises');
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return [...DEFAULT_EXERCISES];
+})();
+
+function saveExercises() {
+  try { localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES)); } catch(e) {}
+}
+
+const CATEGORY_COLORS = {
+  Cardio: "#f43f5e", Mobility: "#10b981", Grip: "#f59e0b",
+  Pulling: "#8b5cf6", Pushing: "#3b82f6", Legs: "#06b6d4",
+  Core: "#ec4899", Back: "#f97316", Skill: "#a78bfa"
+};
+
+let queue = [];
+let currentIdx = 0;
+let intervalMinutes = 30;
+let totalSeconds = 0;
+let timerStartTime = null;   // Date.now() when current countdown began
+let timerInterval = null;
+let restInterval = null;
+let restStartTime = null;    // Date.now() when rest began
+let sessionActive = false;
+let streak = 0;
+let restSeconds = 30;
+let pausedRemaining = null;
+
+const CIRCUMFERENCE = 2 * Math.PI * 118;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const BUCKET_ORDER = ['Cardio', 'Pushing', 'Pulling', 'Legs', 'Core', 'Back', 'Mobility', 'Grip', 'Skill'];
+
+// Seeded random using today's date — same shuffle every time you open the app today
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
+  };
+}
+
+function seededShuffle(arr, rng) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getTodaySeed() {
+  const d = new Date();
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+function buildDailyQueue() {
+  // Each day gets a unique but consistent shuffle — same order if you reopen today
+  const rng = seededRandom(getTodaySeed());
+
+  const buckets = {};
+  BUCKET_ORDER.forEach(cat => {
+    buckets[cat] = seededShuffle(EXERCISES.filter(e => e.category === cat), rng);
+  });
+
+  const result = [];
+  let remaining = [...BUCKET_ORDER];
+  while (remaining.length > 0) {
+    const roundOrder = seededShuffle(remaining, rng);
+    const stillRemaining = [];
+    for (const cat of roundOrder) {
+      if (buckets[cat].length > 0) {
+        result.push(buckets[cat].shift());
+        if (buckets[cat].length > 0) stillRemaining.push(cat);
+      }
+    }
+    remaining = stillRemaining;
+  }
+  return result;
+}
+
+function rebuildQueue() {
+  const doShuffle = document.getElementById('shuffleCheck').checked;
+  queue = doShuffle ? buildDailyQueue() : [...EXERCISES];
+  currentIdx = 0;
+  updateExerciseDisplay();
+  renderQueue();
+  updateDayProgress();
+}
+
+function updateDayProgress() {
+  const remaining = queue.length - currentIdx;
+  document.getElementById('statRemaining').textContent = remaining > 0 ? remaining : '✓';
+}
+
+function updateRing(secondsLeft, total) {
+  const progress = secondsLeft / total;
+  const offset = CIRCUMFERENCE * (1 - progress);
+  const ring = document.getElementById('ringProgress');
+  ring.style.strokeDasharray = CIRCUMFERENCE;
+  ring.style.strokeDashoffset = offset;
+
+  // Color shifts as time runs out
+  if (progress > 0.5) ring.style.stroke = '#3b82f6';
+  else if (progress > 0.25) ring.style.stroke = '#f59e0b';
+  else ring.style.stroke = '#f43f5e';
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const sec = (s % 60).toString().padStart(2, '0');
+  return `${m}:${sec}`;
+}
+
+function tick() {
+  const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+  const remaining = totalSeconds - elapsed;
+
+  document.getElementById('ringTime').textContent = formatTime(Math.max(0, remaining));
+  updateRing(Math.max(0, remaining), totalSeconds);
+
+  if (remaining <= 0) {
+    triggerExercise();
+  }
+}
+
+// Re-sync timer display when tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (!sessionActive || document.hidden) return;
+  // Re-check if timer already expired while hidden
+  if (timerStartTime) {
+    const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+    if (elapsed >= totalSeconds) {
+      clearInterval(timerInterval);
+      triggerExercise();
+    }
+  }
+  if (restStartTime) {
+    const restElapsed = Math.floor((Date.now() - restStartTime) / 1000);
+    if (restElapsed >= restSeconds) {
+      clearInterval(restInterval);
+      // restInterval's callback handles completion; restart it to fire immediately
+      restInterval && clearInterval(restInterval);
+    }
+  }
+});
+
+// ── Service Worker za notifikacije kad je ekran zagašen ──
+const SW_CODE = `
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'NOTIFY') {
+    self.registration.showNotification(e.data.title, {
+      body: e.data.body,
+      icon: '',
+      badge: '',
+      vibrate: [200, 100, 200],
+      tag: 'workout',
+      renotify: true
+    });
+  }
+});
+self.addEventListener('notificationclick', e => { e.notification.close(); });
+`;
+
+let swRegistration = null;
+
+async function initServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const blob = new Blob([SW_CODE], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(blob);
+    swRegistration = await navigator.serviceWorker.register(swUrl, { scope: './' });
+  } catch(e) {}
+}
+
+function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') initServiceWorker();
+    });
+  } else if (Notification.permission === 'granted') {
+    initServiceWorker();
+  }
+}
+
+function sendNotification(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  // Use SW if available (works with screen off), else fallback
+  if (swRegistration && swRegistration.active) {
+    swRegistration.active.postMessage({ type: 'NOTIFY', title, body });
+  } else {
+    try { new Notification(title, { body }); } catch(e) {}
+  }
+}
+
+let dailyLog = [];
+let viewingDay = null; // set after TODAY_KEY is defined
+
+// ── localStorage helpers ──
+const TODAY_KEY = 'wbw_' + getTodaySeed();
+
+function saveState() {
+  try {
+    localStorage.setItem(TODAY_KEY, JSON.stringify({
+      log: dailyLog,
+      streak,
+      currentIdx
+    }));
+    // Persist settings separately (survive day rollover)
+    const shuffleEl = document.getElementById('shuffleCheck');
+    localStorage.setItem('wbw_settings', JSON.stringify({
+      intervalMinutes,
+      restSeconds,
+      shuffle: shuffleEl ? shuffleEl.checked : true
+    }));
+    // Don't delete old day keys — we need history for the calendar
+  } catch(e) {}
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem('wbw_settings');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.intervalMinutes) {
+      intervalMinutes = s.intervalMinutes;
+      document.getElementById('intervalSlider').value = intervalMinutes;
+      document.getElementById('intervalVal').textContent = intervalMinutes + ' min';
+    }
+    if (s.restSeconds) {
+      restSeconds = s.restSeconds;
+      document.getElementById('restSlider').value = restSeconds;
+      updateRest(restSeconds);
+    }
+    if (s.shuffle !== undefined) {
+      document.getElementById('shuffleCheck').checked = s.shuffle;
+    }
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(TODAY_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    dailyLog = data.log || [];
+    streak = data.streak || 0;
+    currentIdx = data.currentIdx || 0;
+    document.getElementById('statDone').textContent = streak;
+  } catch(e) {}
+}
+
+function addToLog(ex, how, detail) {
+  const now = new Date();
+  const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  dailyLog.unshift({ name: ex.name, category: ex.category, time, how, detail: detail || null });
+  saveState();
+  renderLog();
+}
+
+function getAllDayKeys() {
+  try {
+    return Object.keys(localStorage)
+      .filter(k => /^wbw_\d{8}$/.test(k))
+      .sort().reverse();
+  } catch(e) { return [TODAY_KEY]; }
+}
+
+function keyToLabel(key) {
+  const seed = parseInt(key.replace('wbw_', ''));
+  if (isNaN(seed)) return key;
+  const y = Math.floor(seed / 10000);
+  const m = Math.floor((seed % 10000) / 100);
+  const d = seed % 100;
+  const date = new Date(y, m - 1, d);
+  if (seed === getTodaySeed()) return 'Today';
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const ySeed = yesterday.getFullYear() * 10000 + (yesterday.getMonth() + 1) * 100 + yesterday.getDate();
+  if (seed === ySeed) return 'Yesterday';
+  return date.toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function renderLogDays() {
+  const keys = getAllDayKeys();
+  if (!keys.includes(TODAY_KEY)) keys.unshift(TODAY_KEY);
+  const container = document.getElementById('logDays');
+  if (keys.length <= 1) { container.innerHTML = ''; return; }
+  container.innerHTML = keys.map(key => {
+    let count = 0;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) count = (JSON.parse(raw).log || []).filter(e => e.how !== 'skip').length;
+    } catch(e) {}
+    return `<button class="log-day-tab${key === viewingDay ? ' active' : ''}" onclick="switchDay('${key}')">
+      ${keyToLabel(key)}<span class="tab-count">${count > 0 ? count : ''}</span>
+    </button>`;
+  }).join('');
+}
+
+function switchDay(key) {
+  viewingDay = key;
+  renderLogDays();
+  renderLogForKey(key);
+}
+
+function renderLog() {
+  renderLogDays();
+  renderLogForKey(viewingDay || TODAY_KEY);
+}
+
+function renderLogForKey(key) {
+  const list = document.getElementById('logList');
+  let log = (key === TODAY_KEY) ? dailyLog : (() => {
+    try { return JSON.parse(localStorage.getItem(key) || '{}').log || []; } catch(e) { return []; }
+  })();
+
+
+  if (log.length === 0) {
+    list.innerHTML = '<div class="log-empty">No exercises logged</div>';
+    return;
+  }
+  const isToday = key === TODAY_KEY;
+  list.innerHTML = log.map(entry => {
+    const color = CATEGORY_COLORS[entry.category] || '#60a5fa';
+    const skipped = entry.how === 'skip';
+    const isManual = entry.how === 'manual';
+    const d = entry.detail;
+
+    let detailHtml = '';
+    if (d && !skipped) {
+      const parts = [];
+      if (d.reps) parts.push(d.sets > 1 ? `${d.sets}×${d.reps}` : d.reps);
+      if (d.weight > 0) parts.push(`${d.weight}kg`);
+      if (parts.length) detailHtml += `<span class="log-detail">${parts.join(' · ')}</span>`;
+    }
+    const skipTag = skipped ? '<span style="color:var(--muted);font-size:10px;margin-left:6px">skipped</span>' : '';
+    const manualTag = isManual ? '<span style="color:var(--muted);font-size:10px;margin-left:4px">manual</span>' : '';
+    const againBtn = isToday && !skipped ? `<button class="log-again" data-exname="${entry.name.replace(/"/g,'&quot;')}" onclick="logAgain(this.dataset.exname)">+ set</button>` : '';
+
+    return `<div class="log-item">
+      <div class="log-item-left" style="flex:1;flex-wrap:wrap;gap:4px">
+        <div class="log-dot" style="background:${color}"></div>
+        <span class="log-name">${entry.name}</span>
+        ${skipTag}${manualTag}${detailHtml}${againBtn}
+      </div>
+      <span class="log-time">${entry.time}</span>
+    </div>`;
+  }).join('');
+}
+
+function clearLog() {
+  if (viewingDay !== TODAY_KEY) return;
+  dailyLog = [];
+  streak = 0;
+  document.getElementById('statDone').textContent = 0;
+  saveState();
+  renderLog();
+}
+
+
+function doneExercise() {
+  if (!sessionActive) return;
+  clearInterval(timerInterval);
+  const ex = queue[currentIdx % queue.length];
+  document.getElementById('btnDone').disabled = true;
+
+  openWorkoutModal(ex, (detail) => {
+    notify(`✓ Done — ${ex.name}`);
+    addToLog(ex, 'done', detail);
+    streak++;
+    document.getElementById('statDone').textContent = streak;
+    saveState();
+
+    // Brief rest before next exercise countdown
+    document.getElementById('ringLabel').textContent = 'rest';
+    document.getElementById('ringTime').textContent = formatTime(restSeconds);
+    document.getElementById('ringSubLabel').textContent = 'next up soon…';
+    document.getElementById('ringProgress').style.stroke = '#10b981';
+    document.getElementById('exerciseCard').classList.remove('active');
+
+    startRest(() => {
+      currentIdx++;
+      saveState();
+      updateDayProgress();
+      if (currentIdx >= queue.length) {
+        showAllDone();
+        return;
+      }
+      updateExerciseDisplay();
+      renderQueue();
+      startCountdown();
+    });
+  });
+}
+
+function startCountdown() {
+  // Calculate seconds remaining in the current interval window since 06:00
+  const now = new Date();
+  const start = new Date(now); start.setHours(6, 0, 0, 0);
+  if (now < start) start.setDate(start.getDate() - 1); // before 6am — use yesterday's 6am
+  const secondsSinceAnchor = Math.floor((now - start) / 1000);
+  const intervalSec = intervalMinutes * 60;
+  const secondsIntoWindow = secondsSinceAnchor % intervalSec;
+  const remaining = intervalSec - secondsIntoWindow;
+
+  totalSeconds = intervalSec;
+  timerStartTime = Date.now() - (secondsIntoWindow * 1000); // backdate start so elapsed is correct
+  document.getElementById('ringLabel').textContent = 'next exercise in';
+  document.getElementById('ringSubLabel').textContent = 'keep working!';
+  document.getElementById('exerciseCard').classList.remove('active');
+  clearInterval(timerInterval);
+  timerInterval = setInterval(tick, 1000);
+  updateRing(remaining, totalSeconds);
+  document.getElementById('ringTime').textContent = formatTime(remaining);
+  document.getElementById('btnDone').disabled = false;
+}
+
+function startRest(onComplete) {
+  restStartTime = Date.now();
+  clearInterval(restInterval);
+  document.getElementById('ringLabel').textContent = 'rest';
+  document.getElementById('ringSubLabel').textContent = 'catch your breath';
+  updateRing(restSeconds, restSeconds);
+  document.getElementById('ringTime').textContent = formatTime(restSeconds);
+
+  restInterval = setInterval(() => {
+    const restElapsed = Math.floor((Date.now() - restStartTime) / 1000);
+    const remaining = restSeconds - restElapsed;
+    document.getElementById('ringTime').textContent = formatTime(Math.max(0, remaining));
+    updateRing(Math.max(0, remaining), restSeconds);
+    if (remaining <= 0) {
+      clearInterval(restInterval);
+      restStartTime = null;
+      onComplete();
+    }
+  }, 1000);
+}
+
+function showAllDone() {
+  clearInterval(timerInterval);
+  clearInterval(restInterval);
+  sessionActive = false;
+  document.getElementById('btnStart').textContent = 'Start Session';
+  document.getElementById('btnDone').disabled = true;
+  document.getElementById('ringLabel').textContent = 'all done!';
+  document.getElementById('ringTime').textContent = '🎉';
+  document.getElementById('ringSubLabel').textContent = 'come back tomorrow';
+  document.getElementById('ringProgress').style.stroke = '#10b981';
+  document.getElementById('exName').textContent = 'All exercises done!';
+  document.getElementById('exNote').textContent = "You've completed every exercise for today. See you tomorrow.";
+  document.getElementById('exCategory').textContent = 'Complete';
+  document.getElementById('queueList').innerHTML = '<div class="queue-item" style="justify-content:center;color:var(--success)">Nothing left for today ✓</div>';
+}
+
+function toggleTimer() {
+  const btn = document.getElementById('btnStart');
+  if (!sessionActive) {
+    requestNotificationPermission();
+    sessionActive = true;
+    btn.textContent = 'Pause';
+    if (queue.length === 0) rebuildQueue();
+    updateExerciseDisplay();
+    renderQueue();
+    if (pausedRemaining !== null) {
+      // Resume from where we paused
+      totalSeconds = intervalMinutes * 60;
+      timerStartTime = Date.now() - ((totalSeconds - pausedRemaining) * 1000);
+      pausedRemaining = null;
+      clearInterval(timerInterval);
+      timerInterval = setInterval(tick, 1000);
+      document.getElementById('btnDone').disabled = false;
+      document.getElementById('ringSubLabel').textContent = 'keep working!';
+    } else {
+      startCountdown();
+    }
+  } else {
+    sessionActive = false;
+    btn.textContent = 'Resume';
+    // Save remaining time before clearing
+    if (timerStartTime) {
+      const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+      pausedRemaining = Math.max(0, totalSeconds - elapsed);
+    }
+    clearInterval(timerInterval);
+    clearInterval(restInterval);
+    document.getElementById('ringSubLabel').textContent = 'paused';
+    document.getElementById('btnDone').disabled = true;
+  }
+}
+
+function triggerExercise() {
+  if (!sessionActive) return;
+  clearInterval(timerInterval);
+  timerStartTime = null;
+  const ex = queue[currentIdx % queue.length];
+
+  notify(`⚡ ${ex.name}`);
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  playBeep();
+  sendNotification('Time to exercise! ⚡', ex.name + ' — ' + ex.note);
+
+  // Show exercise, wait for user to press Done
+  document.getElementById('ringLabel').textContent = 'exercise time!';
+  document.getElementById('ringTime').textContent = 'GO!';
+  document.getElementById('ringSubLabel').textContent = 'press Done when finished';
+  document.getElementById('ringProgress').style.stroke = '#10b981';
+  document.getElementById('exerciseCard').classList.add('active');
+}
+
+function skipExercise() {
+  if (!sessionActive) return;
+  const ex = queue[currentIdx % queue.length];
+  addToLog(ex, 'skip');
+  clearInterval(timerInterval);
+  currentIdx++;
+  saveState();
+  updateDayProgress();
+  notify('Skipped →');
+  if (currentIdx >= queue.length) {
+    showAllDone();
+    return;
+  }
+  updateExerciseDisplay();
+  renderQueue();
+  startCountdown();
+}
+
+function updateExerciseDisplay() {
+  const ex = queue[currentIdx % queue.length];
+  if (!ex) return;
+  document.getElementById('exCategory').textContent = ex.category;
+  document.getElementById('exCategory').style.color = CATEGORY_COLORS[ex.category] || '#60a5fa';
+  document.getElementById('exName').textContent = ex.name;
+  document.getElementById('exNote').textContent = ex.note;
+}
+
+function renderQueue() {
+  const list = document.getElementById('queueList');
+  list.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const idx = (currentIdx + i) % queue.length;
+    const ex = queue[idx];
+    if (!ex) continue;
+    const div = document.createElement('div');
+    div.className = 'queue-item' + (i === 0 ? ' next' : '');
+    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span>${ex.name}`;
+    list.appendChild(div);
+  }
+}
+
+function updateInterval(val) {
+  intervalMinutes = parseInt(val);
+  document.getElementById('intervalVal').textContent = val + ' min';
+  if (!sessionActive) {
+    document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
+    updateRing(1, 1);
+  }
+  saveState();
+}
+
+function updateRest(val) {
+  restSeconds = parseInt(val);
+  const label = restSeconds >= 60
+    ? (restSeconds % 60 === 0 ? (restSeconds / 60) + ' min' : Math.floor(restSeconds / 60) + 'm ' + (restSeconds % 60) + 's')
+    : restSeconds + ' sec';
+  document.getElementById('restVal').textContent = label;
+  saveState();
+}
+
+function toggleSettings() {
+  document.getElementById('settingsPanel').classList.toggle('open');
+}
+
+function notify(msg) {
+  const el = document.getElementById('notification');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.15, 0.3].forEach((t, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = i < 2 ? 880 : 1320;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.12);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.13);
+    });
+  } catch(e) {}
+}
+
+// ── Workout input modal ──
+let _pendingModalCallback = null;
+let _pendingModalEx = null;
+
+function openWorkoutModal(ex, callback) {
+  _pendingModalEx = ex;
+  _pendingModalCallback = callback;
+  document.getElementById('modalExName').textContent = ex.name;
+  document.getElementById('modalReps').value = '';
+  document.getElementById('modalSets').value = '1';
+  document.getElementById('modalWeight').value = '';
+  document.getElementById('workoutModal').classList.add('open');
+  setTimeout(() => document.getElementById('modalReps').focus(), 100);
+}
+
+function closeWorkoutModal(save) {
+  document.getElementById('workoutModal').classList.remove('open');
+  if (!_pendingModalCallback) return;
+  let detail = null;
+  if (save) {
+    const reps = document.getElementById('modalReps').value.trim();
+    const sets = parseInt(document.getElementById('modalSets').value) || 1;
+    const weight = parseFloat(document.getElementById('modalWeight').value) || 0;
+    detail = { reps, sets, weight };
+  }
+  _pendingModalCallback(detail);
+  _pendingModalCallback = null;
+  _pendingModalEx = null;
+}
+
+
+// ── Exercise editor ──
+function toggleEditor() {
+  const sec = document.getElementById('editorSection');
+  const open = sec.style.display === 'none' || sec.style.display === '';
+  sec.style.display = open ? 'block' : 'none';
+  if (open) renderEditorList();
+}
+
+function renderEditorList() {
+  const list = document.getElementById('editorList');
+  list.innerHTML = EXERCISES.map((ex, i) => {
+    const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
+    return `<div class="editor-item">
+      <span class="editor-item-cat" style="background:${color}">${ex.category}</span>
+      <span class="editor-item-name">${ex.name}</span>
+      <span class="editor-item-note">${ex.note}</span>
+      <button class="editor-btn-del" onclick="deleteExercise(${i})" title="Remove">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteExercise(i) {
+  EXERCISES.splice(i, 1);
+  saveExercises();
+  renderEditorList();
+  rebuildQueue();
+}
+
+function addExercise() {
+  const name = document.getElementById('newExName').value.trim();
+  const cat = document.getElementById('newExCat').value;
+  const note = document.getElementById('newExNote').value.trim() || '—';
+  if (!name) { document.getElementById('newExName').focus(); return; }
+  EXERCISES.push({ name, category: cat, note });
+  saveExercises();
+  document.getElementById('newExName').value = '';
+  document.getElementById('newExNote').value = '';
+  renderEditorList();
+  rebuildQueue();
+  notify(`+ ${name} added`);
+}
+
+// ── Manual log ──
+function openManualLog() {
+  document.getElementById('pickerSearch').value = '';
+  filterPicker('');
+  document.getElementById('manualLogModal').classList.add('open');
+  setTimeout(() => document.getElementById('pickerSearch').focus(), 100);
+}
+
+function closeManualLog() {
+  document.getElementById('manualLogModal').classList.remove('open');
+}
+
+function filterPicker(query) {
+  const q = query.toLowerCase();
+  // Names already done today (logged as 'done' or 'manual')
+  const doneTodayNames = new Set(
+    dailyLog.filter(e => e.how === 'done' || e.how === 'manual').map(e => e.name)
+  );
+  const matches = EXERCISES.filter(e => !q || e.name.toLowerCase().includes(q));
+  const list = document.getElementById('pickerList');
+  if (matches.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 4px">No matches</div>';
+    return;
+  }
+  list.innerHTML = matches.map(ex => {
+    const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
+    const done = doneTodayNames.has(ex.name);
+    const safeName = ex.name.replace(/"/g, '&quot;');
+    return `<div class="picker-item${done ? ' done-today' : ''}" data-exname="${safeName}">
+      <span class="editor-item-cat" style="background:${color};font-size:10px;padding:2px 6px;border-radius:20px;font-weight:600;color:#fff;white-space:nowrap">${ex.category}</span>
+      <span>${ex.name}</span>
+    </div>`;
+  }).join('');
+
+  // Attach click handlers after rendering
+  list.querySelectorAll('.picker-item').forEach(el => {
+    el.addEventListener('click', () => selectManualExercise(el.dataset.exname));
+  });
+}
+
+function selectManualExercise(name) {
+  const ex = EXERCISES.find(e => e.name === name);
+  if (!ex) return;
+  closeManualLog();
+  setTimeout(() => {
+    openWorkoutModal(ex, (detail) => {
+      addToLog(ex, 'manual', detail);
+      removeFromQueue(ex.name);
+      streak++;
+      document.getElementById('statDone').textContent = streak;
+      saveState();
+      notify(`✓ Logged — ${ex.name}`);
+    });
+  }, 150);
+}
+
+function logAgain(name) {
+  const ex = EXERCISES.find(e => e.name === name);
+  if (!ex) return;
+  openWorkoutModal(ex, (detail) => {
+    if (!detail) return;
+    addToLog(ex, 'manual', detail);
+    saveState();
+    notify(`✓ Logged again — ${ex.name}`);
+  });
+}
+
+function removeFromQueue(name) {
+  // Find first occurrence of this exercise at or after currentIdx and remove it
+  const idx = queue.findIndex((e, i) => i >= currentIdx && e.name === name);
+  if (idx !== -1) {
+    queue.splice(idx, 1);
+    // Don't change currentIdx — everything shifts forward naturally
+    updateDayProgress();
+    renderQueue();
+    updateExerciseDisplay();
+  }
+}
+
+// ── Init
+loadSettings();       // restore settings before building queue
+rebuildQueue();       // build queue first so currentIdx from loadState is valid
+loadState();          // restore today's progress
+viewingDay = TODAY_KEY;
+updateExerciseDisplay();
+renderQueue();
+renderLog();
+updateDayProgress();
+
+updateRing(1, 1);
+document.getElementById('ringProgress').style.stroke = '#3b82f6';
+document.getElementById('ringProgress').style.strokeDasharray = CIRCUMFERENCE;
+document.getElementById('ringProgress').style.strokeDashoffset = 0;
+document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
+</script>
+</body>
+</html>
