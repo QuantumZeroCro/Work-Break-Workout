@@ -757,24 +757,29 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 
 async function initAuth() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    currentUser = session.user;
-    showApp();
-  } else {
-    document.getElementById('authScreen').style.display = 'flex';
-  }
-
-  sb.auth.onAuthStateChange((event, session) => {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
     if (session) {
       currentUser = session.user;
       showApp();
     } else {
-      currentUser = null;
-      document.getElementById('mainApp').style.display = 'none';
       document.getElementById('authScreen').style.display = 'flex';
     }
-  });
+
+    sb.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        currentUser = session.user;
+        showApp();
+      } else {
+        currentUser = null;
+        document.getElementById('mainApp').style.display = 'none';
+        document.getElementById('authScreen').style.display = 'flex';
+      }
+    });
+  } catch(e) {
+    console.error('initAuth error:', e);
+    document.getElementById('authScreen').style.display = 'flex';
+  }
 }
 
 function showApp() {
@@ -1381,9 +1386,9 @@ async function deleteLogEntry(idx) {
   saveState();
   renderLog();
 }
+
+function doneExercise() {
   clearInterval(timerInterval);
-  const ex = queue[currentIdx % queue.length];
-  document.getElementById('btnDone').disabled = true;
 
   openWorkoutModal(ex, (detail) => {
     notify(`✓ Done — ${ex.name}`);
@@ -1956,7 +1961,12 @@ function initApp() {
   loadLogsFromDB().then(() => loadHistoryFromDB());
 }
 
-initAuth();
+// ── Boot ──
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAuth);
+} else {
+  initAuth();
+}
 </script>
 </body>
 </html>
