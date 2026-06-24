@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Work Break Workout</title>
   <meta name="description" content="A personal workout timer that prompts exercises throughout your workday, tracks your daily log, and works offline as a single HTML file." />
+  <meta name="theme-color" content="#0e0f11" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.json" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
@@ -1107,32 +1111,15 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// ── Service Worker za notifikacije kad je ekran zagašen ──
-const SW_CODE = `
-self.addEventListener('message', e => {
-  if (e.data && e.data.type === 'NOTIFY') {
-    self.registration.showNotification(e.data.title, {
-      body: e.data.body,
-      icon: '',
-      badge: '',
-      vibrate: [200, 100, 200],
-      tag: 'workout',
-      renotify: true
-    });
-  }
-});
-self.addEventListener('notificationclick', e => { e.notification.close(); });
-`;
-
+// ── Service Worker za notifikacije ──
 let swRegistration = null;
 
 async function initServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    const blob = new Blob([SW_CODE], { type: 'application/javascript' });
-    const swUrl = URL.createObjectURL(blob);
-    swRegistration = await navigator.serviceWorker.register(swUrl, { scope: './' });
-  } catch(e) {}
+    swRegistration = await navigator.serviceWorker.register('sw.js', { scope: '/Work-Break-Workout/' });
+    await navigator.serviceWorker.ready;
+  } catch(e) { console.error('SW registration failed:', e); }
 }
 
 function requestNotificationPermission() {
@@ -1594,12 +1581,17 @@ function triggerExercise() {
 
 function skipExercise() {
   const ex = queue[currentIdx % queue.length];
-  addToLog(ex, 'skip');
+  if (!ex) return;
   clearInterval(timerInterval);
-  currentIdx++;
+
+  // Move exercise to end of queue instead of removing it
+  queue.splice(currentIdx, 1);
+  queue.push(ex);
+
+  notify('Skipped → moved to end');
   saveState();
   updateDayProgress();
-  notify('Skipped →');
+
   if (currentIdx >= queue.length) {
     showAllDone();
     return;
