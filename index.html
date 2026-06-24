@@ -1475,6 +1475,32 @@ function removeFromQueue(name) {
 }
 
 // ── Init
+// ── Debug: show storage status on load ──
+(function() {
+  const msgs = [];
+  try {
+    localStorage.setItem('wbw_test', '1');
+    localStorage.removeItem('wbw_test');
+    msgs.push('✓ localStorage works');
+  } catch(e) {
+    msgs.push('✗ localStorage FAILED: ' + e.message);
+  }
+  msgs.push('TODAY_KEY: ' + TODAY_KEY);
+  try {
+    const raw = localStorage.getItem(TODAY_KEY);
+    msgs.push('Saved data: ' + (raw ? raw.substring(0, 80) + '...' : 'NONE'));
+    const allKeys = Object.keys(localStorage).filter(k => k.startsWith('wbw_'));
+    msgs.push('All wbw_ keys: ' + (allKeys.join(', ') || 'none'));
+  } catch(e) {
+    msgs.push('Read error: ' + e.message);
+  }
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#111;color:#0f0;font:11px monospace;padding:8px;z-index:9999;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
+  div.textContent = msgs.join('\n');
+  div.onclick = () => div.remove();
+  document.body.appendChild(div);
+})();
+
 loadSettings();       // restore settings before building queue
 rebuildQueue();       // build queue first so currentIdx from loadState is valid
 loadState();          // restore today's progress
