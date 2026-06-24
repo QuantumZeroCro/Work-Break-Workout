@@ -1425,17 +1425,17 @@ function doneExercise() {
 }
 
 function startCountdown() {
-  // Calculate seconds remaining in the current interval window since 06:00
+  // Anchor to 00:01 — intervals run from midnight+1min
   const now = new Date();
-  const start = new Date(now); start.setHours(6, 0, 0, 0);
-  if (now < start) start.setDate(start.getDate() - 1); // before 6am — use yesterday's 6am
-  const secondsSinceAnchor = Math.floor((now - start) / 1000);
+  const anchor = new Date(now); anchor.setHours(0, 1, 0, 0);
+  if (now < anchor) anchor.setDate(anchor.getDate() - 1);
+  const secondsSinceAnchor = Math.floor((now - anchor) / 1000);
   const intervalSec = intervalMinutes * 60;
   const secondsIntoWindow = secondsSinceAnchor % intervalSec;
   const remaining = intervalSec - secondsIntoWindow;
 
   totalSeconds = intervalSec;
-  timerStartTime = Date.now() - (secondsIntoWindow * 1000); // backdate start so elapsed is correct
+  timerStartTime = Date.now() - (secondsIntoWindow * 1000);
   document.getElementById('ringLabel').textContent = 'next exercise in';
   document.getElementById('ringSubLabel').textContent = 'keep working!';
   document.getElementById('exerciseCard').classList.remove('active');
@@ -1491,6 +1491,65 @@ function autoStart() {
   updateExerciseDisplay();
   renderQueue();
   startCountdown();
+  subscribeRealtime();
+}
+
+let realtimeChannel = null;
+function subscribeRealtime() {
+  if (!currentUser) return;
+  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+
+  realtimeChannel = sb.channel('workout_log_changes')
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'workout_log',
+      filter: `user_id=eq.${currentUser.id}`
+    }, (payload) => {
+      // Another device logged an exercise — sync state
+      const r = payload.new;
+      const entry = {
+        name: r.exercise_name,
+        category: r.category,
+        time: new Date(r.logged_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        how: r.how,
+        detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null
+      };
+      // Only add if not already in log (this device may have added it)
+      const alreadyLogged = dailyLog.some(e => e.name === entry.name && e.time === entry.time);
+      if (!alreadyLogged) {
+        dailyLog.unshift(entry);
+        streak = dailyLog.filter(e => e.how !== 'skip').length;
+        document.getElementById('statDone').textContent = streak;
+        saveState();
+        removeFromQueue(entry.name);
+        renderLog();
+        notify(`Synced: ${entry.name}`);
+        // If we're currently waiting on this exercise, advance
+        const currentEx = queue[currentIdx % queue.length];
+        if (currentEx && currentEx.name === entry.name) {
+          startRest(() => {
+            currentIdx++;
+            saveState();
+            updateDayProgress();
+            if (currentIdx >= queue.length) { showAllDone(); return; }
+            updateExerciseDisplay();
+            renderQueue();
+            startCountdown();
+          });
+        }
+      }
+    })
+    .on('postgres_changes', {
+      event: 'DELETE',
+      schema: 'public',
+      table: 'workout_log',
+      filter: `user_id=eq.${currentUser.id}`
+    }, () => {
+      // Re-load today's log from DB on any delete
+      loadLogsFromDB();
+    })
+    .subscribe();
 }
 
 // Midnight reset — rebuild queue and clear today's state when day rolls over
