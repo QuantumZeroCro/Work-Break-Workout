@@ -536,6 +536,13 @@
   }
   .log-again:hover { border-color: var(--accent); color: var(--accent2); }
 
+  .log-del, .history-del {
+    background: none; border: none; color: var(--surface2);
+    font-size: 14px; cursor: pointer; padding: 0 2px; line-height: 1;
+    flex-shrink: 0; transition: color 0.15s;
+  }
+  .log-del:hover, .history-del:hover { color: #f43f5e; }
+
   /* ── History modal ── */
   .history-day {
     background: var(--surface);
@@ -1269,6 +1276,7 @@ function renderLogForKey(key) {
     const skipTag = skipped ? '<span style="color:var(--muted);font-size:10px;margin-left:6px">skipped</span>' : '';
     const manualTag = isManual ? '<span style="color:var(--muted);font-size:10px;margin-left:4px">manual</span>' : '';
     const againBtn = isToday && !skipped ? `<button class="log-again" data-exname="${entry.name.replace(/"/g,'&quot;')}" onclick="logAgain(this.dataset.exname)">+ set</button>` : '';
+    const delBtn = isToday ? `<button class="log-del" onclick="deleteLogEntry(${log.indexOf(entry)})" title="Delete">×</button>` : '';
 
     return `<div class="log-item">
       <div class="log-item-left" style="flex:1;flex-wrap:wrap;gap:4px">
@@ -1276,7 +1284,10 @@ function renderLogForKey(key) {
         <span class="log-name">${entry.name}</span>
         ${skipTag}${manualTag}${detailHtml}${againBtn}
       </div>
-      <span class="log-time">${entry.time}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="log-time">${entry.time}</span>
+        ${delBtn}
+      </div>
     </div>`;
   }).join('');
 }
@@ -1291,7 +1302,32 @@ function clearLog() {
 }
 
 
-function doneExercise() {
+async function deleteLogEntry(idx) {
+  const entry = dailyLog[idx];
+  if (!entry) return;
+  // Remove from DB by matching user_id + exercise_name + time
+  if (currentUser) {
+    try {
+      const loggedAt = new Date();
+      const [h, m] = entry.time.split(':');
+      loggedAt.setHours(parseInt(h), parseInt(m), 0, 0);
+      // Delete the most recent matching row (same name, same minute)
+      const from = new Date(loggedAt.getTime() - 60000).toISOString();
+      const to = new Date(loggedAt.getTime() + 60000).toISOString();
+      await sb.from('workout_log')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('exercise_name', entry.name)
+        .gte('logged_at', from)
+        .lte('logged_at', to);
+    } catch(e) { console.error('delete error:', e); }
+  }
+  dailyLog.splice(idx, 1);
+  streak = dailyLog.filter(e => e.how !== 'skip').length;
+  document.getElementById('statDone').textContent = streak;
+  saveState();
+  renderLog();
+}
   clearInterval(timerInterval);
   const ex = queue[currentIdx % queue.length];
   document.getElementById('btnDone').disabled = true;
@@ -1612,6 +1648,7 @@ async function renderHistory() {
         .eq('user_id', currentUser.id)
         .order('logged_at', { ascending: false });
       if (data) allEntries = data.map(r => ({
+        id: r.id,
         name: r.exercise_name,
         category: r.category,
         how: r.how,
@@ -1678,10 +1715,12 @@ async function renderHistory() {
         detStr = parts.join(' · ');
       }
       const skipTag = e.how === 'skip' ? '<span style="color:var(--muted);font-size:10px;margin-left:4px">skipped</span>' : '';
+      const delBtn = e.id ? `<button class="history-del" onclick="deleteHistoryEntry('${e.id}', this)" title="Delete">×</button>` : '';
       return `<div class="history-entry">
         <div class="log-dot" style="background:${color};flex-shrink:0"></div>
         <span class="history-entry-name">${e.name}${skipTag}</span>
         ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
+        ${delBtn}
       </div>`;
     }).join('');
 
@@ -1697,6 +1736,15 @@ async function renderHistory() {
 
 function toggleHistoryDay(id) {
   document.getElementById(id).classList.toggle('open');
+}
+
+async function deleteHistoryEntry(dbId, btn) {
+  if (!currentUser) return;
+  try {
+    await sb.from('workout_log').delete().eq('id', dbId).eq('user_id', currentUser.id);
+    // Remove the row from DOM
+    btn.closest('.history-entry').remove();
+  } catch(e) { console.error('history delete error:', e); }
 }
 function openManualLog() {
   document.getElementById('pickerSearch').value = '';
