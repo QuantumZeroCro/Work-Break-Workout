@@ -1444,8 +1444,10 @@ function startCountdown() {
 }
 
 function startRest(onComplete) {
+  if (restSeconds <= 0) { onComplete(); return; }
   restStartTime = Date.now();
   clearInterval(restInterval);
+  document.getElementById('btnDone').disabled = true;
   document.getElementById('ringLabel').textContent = 'rest';
   document.getElementById('ringSubLabel').textContent = 'catch your breath';
   updateRing(restSeconds, restSeconds);
@@ -1525,6 +1527,7 @@ function triggerExercise() {
   document.getElementById('ringSubLabel').textContent = 'press Done when finished';
   document.getElementById('ringProgress').style.stroke = '#10b981';
   document.getElementById('exerciseCard').classList.add('active');
+  document.getElementById('btnDone').disabled = false;
 }
 
 function skipExercise() {
