@@ -29,16 +29,24 @@
     color: var(--text);
     font-family: 'Space Grotesk', sans-serif;
     min-height: 100vh;
+  }
+
+  #mainApp {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
     padding: 24px 16px 40px;
     gap: 28px;
+    width: 100%;
   }
 
   header {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 420px;
   }
   header h1 {
     font-size: 13px;
@@ -526,6 +534,38 @@
     margin-left: 6px; white-space: nowrap;
   }
   .log-again:hover { border-color: var(--accent); color: var(--accent2); }
+
+  /* ── History modal ── */
+  .history-day {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .history-day-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .history-day-header:hover { background: var(--surface2); }
+  .history-day-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .history-day-meta { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; }
+  .history-day-entries {
+    display: none; flex-direction: column; gap: 1px;
+    border-top: 1px solid var(--surface2);
+  }
+  .history-day-entries.open { display: flex; }
+  .history-entry {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 16px; font-size: 13px;
+    border-bottom: 1px solid var(--surface2);
+  }
+  .history-entry:last-child { border-bottom: none; }
+  .history-entry-name { flex: 1; color: var(--text); }
+  .history-entry-detail { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; }
+  .history-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px; }
+  .history-list { max-height: 65vh; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -589,6 +629,7 @@
   <button class="btn-ghost" onclick="skipExercise()">Skip →</button>
   <button class="btn-ghost" onclick="toggleSettings()">⚙ Settings</button>
   <button class="btn-ghost" onclick="toggleEditor()">✎ Exercises</button>
+  <button class="btn-ghost" onclick="openHistory()">📅 History</button>
   <button class="btn-ghost" onclick="openManualLog()">＋ Log</button>
 </div>
 
@@ -628,7 +669,6 @@
 </div>
 
 <!-- Exercise editor -->
-</div><!-- end mainApp -->
 <div class="editor-section" id="editorSection" style="display:none">
   <div class="editor-header">
     <span class="editor-title">Exercise list</span>
@@ -644,6 +684,19 @@
     </select>
     <input id="newExNote" placeholder="Note (optional)" style="grid-column:1/-1"/>
     <button class="editor-add-btn" onclick="addExercise()">+ Add exercise</button>
+  </div>
+</div>
+
+</div><!-- end mainApp -->
+
+<!-- History modal -->
+<div class="modal-backdrop" id="historyModal" onclick="if(event.target===this)closeHistory()">
+  <div class="modal" style="max-width:440px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <h3>History</h3>
+      <button onclick="closeHistory()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px">×</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
   </div>
 </div>
 
@@ -1535,7 +1588,114 @@ function addExercise() {
   notify(`+ ${name} added`);
 }
 
-// ── Manual log ──
+// ── History ──
+function openHistory() {
+  renderHistory();
+  document.getElementById('historyModal').classList.add('open');
+}
+
+function closeHistory() {
+  document.getElementById('historyModal').classList.remove('open');
+}
+
+async function renderHistory() {
+  const list = document.getElementById('historyList');
+  list.innerHTML = '<div class="history-empty">Loading…</div>';
+
+  let allEntries = [];
+  if (currentUser) {
+    try {
+      const { data } = await sb.from('workout_log')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('logged_at', { ascending: false });
+      if (data) allEntries = data.map(r => ({
+        name: r.exercise_name,
+        category: r.category,
+        how: r.how,
+        detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null,
+        date: new Date(r.logged_at)
+      }));
+    } catch(e) {}
+  }
+
+  // Fall back to localStorage if DB empty
+  if (allEntries.length === 0) {
+    const keys = getAllDayKeys();
+    keys.forEach(key => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const log = JSON.parse(raw).log || [];
+        const seed = parseInt(key.replace('wbw_', ''));
+        const y = Math.floor(seed / 10000), m = Math.floor((seed % 10000) / 100), d = seed % 100;
+        log.forEach(e => allEntries.push({ ...e, date: new Date(y, m-1, d) }));
+      } catch(e) {}
+    });
+  }
+
+  if (allEntries.length === 0) {
+    list.innerHTML = '<div class="history-empty">No history yet</div>';
+    return;
+  }
+
+  // Group by date
+  const byDay = {};
+  allEntries.forEach(e => {
+    const d = e.date;
+    const key = d.getFullYear() * 10000 + (d.getMonth()+1) * 100 + d.getDate();
+    if (!byDay[key]) byDay[key] = [];
+    byDay[key].push(e);
+  });
+
+  const days = Object.keys(byDay).sort().reverse();
+  list.innerHTML = days.map((dayKey, di) => {
+    const entries = byDay[dayKey];
+    const done = entries.filter(e => e.how !== 'skip').length;
+    const skipped = entries.filter(e => e.how === 'skip').length;
+    const y = Math.floor(dayKey / 10000), m = Math.floor((dayKey % 10000) / 100), d = dayKey % 100;
+    const date = new Date(y, m-1, d);
+    const todaySeed = getTodaySeed();
+    let label;
+    if (parseInt(dayKey) === todaySeed) label = 'Today';
+    else {
+      const yest = new Date(); yest.setDate(yest.getDate()-1);
+      const ySeed = yest.getFullYear()*10000 + (yest.getMonth()+1)*100 + yest.getDate();
+      label = parseInt(dayKey) === ySeed ? 'Yesterday'
+        : date.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+    const meta = `${done} done${skipped ? `, ${skipped} skipped` : ''}`;
+    const entryRows = entries.map(e => {
+      const color = CATEGORY_COLORS[e.category] || '#60a5fa';
+      const det = e.detail;
+      let detStr = '';
+      if (det) {
+        const parts = [];
+        if (det.reps) parts.push(det.sets > 1 ? `${det.sets}×${det.reps}` : det.reps);
+        if (det.weight > 0) parts.push(`${det.weight}kg`);
+        detStr = parts.join(' · ');
+      }
+      const skipTag = e.how === 'skip' ? '<span style="color:var(--muted);font-size:10px;margin-left:4px">skipped</span>' : '';
+      return `<div class="history-entry">
+        <div class="log-dot" style="background:${color};flex-shrink:0"></div>
+        <span class="history-entry-name">${e.name}${skipTag}</span>
+        ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
+      </div>`;
+    }).join('');
+
+    return `<div class="history-day">
+      <div class="history-day-header" onclick="toggleHistoryDay('hday-${di}')">
+        <span class="history-day-title">${label}</span>
+        <span class="history-day-meta">${meta}</span>
+      </div>
+      <div class="history-day-entries${di === 0 ? ' open' : ''}" id="hday-${di}">${entryRows}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleHistoryDay(id) {
+  document.getElementById(id).classList.toggle('open');
+}
 function openManualLog() {
   document.getElementById('pickerSearch').value = '';
   filterPicker('');
