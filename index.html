@@ -1343,9 +1343,11 @@ async function resetDay() {
   syncQueueWithLog();
   updateExerciseDisplay();
   renderQueue();
-  renderLog();
   updateDayProgress();
+  clearInterval(timerInterval);
+  clearInterval(restInterval);
   startCountdown();
+  document.getElementById('btnDone').disabled = false;
 
   notify('Day reset ✓');
 }
