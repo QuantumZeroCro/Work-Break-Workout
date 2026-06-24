@@ -934,15 +934,13 @@ function saveState() {
       streak,
       currentIdx
     }));
-    // Persist settings separately (survive day rollover)
     const shuffleEl = document.getElementById('shuffleCheck');
     localStorage.setItem('wbw_settings', JSON.stringify({
       intervalMinutes,
       restSeconds,
       shuffle: shuffleEl ? shuffleEl.checked : true
     }));
-    // Don't delete old day keys — we need history for the calendar
-  } catch(e) {}
+  } catch(e) { console.error('saveState error:', e); }
 }
 
 function loadSettings() {
@@ -975,7 +973,9 @@ function loadState() {
     streak = data.streak || 0;
     currentIdx = data.currentIdx || 0;
     document.getElementById('statDone').textContent = streak;
-  } catch(e) {}
+    // Debug
+    console.log('loadState:', { log: dailyLog.length, streak, currentIdx });
+  } catch(e) { console.error('loadState error:', e); }
 }
 
 function addToLog(ex, how, detail) {
@@ -1475,7 +1475,22 @@ function removeFromQueue(name) {
 }
 
 // ── Init
-// ── Debug: show storage status on load ──
+loadSettings();
+rebuildQueue();
+loadState();
+viewingDay = TODAY_KEY;
+updateExerciseDisplay();
+renderQueue();
+renderLog();
+updateDayProgress();
+
+updateRing(1, 1);
+document.getElementById('ringProgress').style.stroke = '#3b82f6';
+document.getElementById('ringProgress').style.strokeDasharray = CIRCUMFERENCE;
+document.getElementById('ringProgress').style.strokeDashoffset = 0;
+document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
+
+// ── Debug panel ──
 (function() {
   const msgs = [];
   try {
@@ -1488,9 +1503,10 @@ function removeFromQueue(name) {
   msgs.push('TODAY_KEY: ' + TODAY_KEY);
   try {
     const raw = localStorage.getItem(TODAY_KEY);
-    msgs.push('Saved data: ' + (raw ? raw.substring(0, 80) + '...' : 'NONE'));
-    const allKeys = Object.keys(localStorage).filter(k => k.startsWith('wbw_'));
-    msgs.push('All wbw_ keys: ' + (allKeys.join(', ') || 'none'));
+    msgs.push('Raw saved: ' + (raw ? raw.substring(0, 100) : 'NONE'));
+    msgs.push('Loaded log entries: ' + dailyLog.length);
+    msgs.push('Loaded streak: ' + streak);
+    msgs.push('All wbw_ keys: ' + Object.keys(localStorage).filter(k => k.startsWith('wbw_')).join(', '));
   } catch(e) {
     msgs.push('Read error: ' + e.message);
   }
@@ -1500,21 +1516,6 @@ function removeFromQueue(name) {
   div.onclick = () => div.remove();
   document.body.appendChild(div);
 })();
-
-loadSettings();       // restore settings before building queue
-rebuildQueue();       // build queue first so currentIdx from loadState is valid
-loadState();          // restore today's progress
-viewingDay = TODAY_KEY;
-updateExerciseDisplay();
-renderQueue();
-renderLog();
-updateDayProgress();
-
-updateRing(1, 1);
-document.getElementById('ringProgress').style.stroke = '#3b82f6';
-document.getElementById('ringProgress').style.strokeDasharray = CIRCUMFERENCE;
-document.getElementById('ringProgress').style.strokeDashoffset = 0;
-document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
 </script>
 </body>
 </html>
