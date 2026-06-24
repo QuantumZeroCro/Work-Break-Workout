@@ -579,7 +579,7 @@
 <body>
 
 <!-- Auth screen -->
-<div id="authScreen" style="display:none;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px">
+<div id="authScreen" style="display:none;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px">
   <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em">Work Break Workout</h1>
   <div style="background:var(--surface);border:1px solid var(--surface2);border-radius:20px;padding:28px 24px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px">
     <div id="authTitle" style="font-size:16px;font-weight:700;color:var(--text)">Sign in</div>
@@ -804,17 +804,33 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
   btn.textContent = '...';
   btn.disabled = true;
 
-  let error;
-  if (authMode === 'signin') {
-    ({ error } = await sb.auth.signInWithPassword({ email, password }));
-  } else {
-    ({ error } = await sb.auth.signUp({ email, password }));
-    if (!error) { errEl.style.color = '#10b981'; errEl.textContent = 'Check your email to confirm your account.'; errEl.style.display = 'block'; }
+  try {
+    let result;
+    if (authMode === 'signin') {
+      result = await sb.auth.signInWithPassword({ email, password });
+    } else {
+      result = await sb.auth.signUp({ email, password });
+      if (!result.error) {
+        errEl.style.color = '#10b981';
+        errEl.textContent = 'Check your email to confirm your account.';
+        errEl.style.display = 'block';
+      }
+    }
+    console.log('auth result:', result);
+    if (result.error) {
+      errEl.style.color = '#f43f5e';
+      errEl.textContent = result.error.message;
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    console.error('auth exception:', e);
+    errEl.style.color = '#f43f5e';
+    errEl.textContent = 'Error: ' + e.message;
+    errEl.style.display = 'block';
   }
 
   btn.textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
   btn.disabled = false;
-  if (error) { errEl.style.color = '#f43f5e'; errEl.textContent = error.message; errEl.style.display = 'block'; }
 });
 
 // ── Supabase DB sync ──
