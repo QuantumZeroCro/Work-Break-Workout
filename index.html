@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Work Break Workout</title>
   <meta name="description" content="A personal workout timer that prompts exercises throughout your workday, tracks your daily log, and works offline as a single HTML file." />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
 
@@ -529,8 +530,25 @@
 </head>
 <body>
 
+<!-- Auth screen -->
+<div id="authScreen" style="display:none;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px">
+  <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em">Work Break Workout</h1>
+  <div style="background:var(--surface);border:1px solid var(--surface2);border-radius:20px;padding:28px 24px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px">
+    <div id="authTitle" style="font-size:16px;font-weight:700;color:var(--text)">Sign in</div>
+    <div id="authError" style="font-size:12px;color:#f43f5e;display:none"></div>
+    <input id="authEmail" type="email" placeholder="Email" style="background:var(--surface2);border:1px solid #2a2d35;border-radius:8px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:15px;padding:11px 13px;outline:none;width:100%" />
+    <input id="authPassword" type="password" placeholder="Password" style="background:var(--surface2);border:1px solid #2a2d35;border-radius:8px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:15px;padding:11px 13px;outline:none;width:100%" />
+    <button id="authSubmitBtn" style="background:var(--accent);color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;padding:12px;border:none;border-radius:10px;cursor:pointer">Sign in</button>
+    <button id="authToggleBtn" style="background:none;border:none;color:var(--muted);font-family:'Space Grotesk',sans-serif;font-size:13px;cursor:pointer;padding:4px">No account? Sign up</button>
+  </div>
+</div>
+
+<!-- Main app -->
+<div id="mainApp" style="display:none">
+
 <header>
   <h1>Work Break Workout</h1>
+  <button onclick="sb.auth.signOut()" style="background:none;border:1px solid var(--surface2);color:var(--muted);font-family:'Space Grotesk',sans-serif;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer">Sign out</button>
 </header>
 
 <!-- Ring timer -->
@@ -567,7 +585,6 @@
 
 <!-- Controls -->
 <div class="controls">
-  <button class="btn-primary" id="btnStart" onclick="toggleTimer()">Start Session</button>
   <button class="btn-done" id="btnDone" onclick="doneExercise()" disabled>✓ Done</button>
   <button class="btn-ghost" onclick="skipExercise()">Skip →</button>
   <button class="btn-ghost" onclick="toggleSettings()">⚙ Settings</button>
@@ -585,7 +602,7 @@
   </div>
   <div class="setting-row">
     <label>Rest duration</label>
-    <input type="range" id="restSlider" min="1" max="300" value="30" step="5" oninput="updateRest(this.value)">
+    <input type="range" id="restSlider" min="1" max="300" value="30" step="1" oninput="updateRest(this.value)">
     <span id="restVal">30 sec</span>
   </div>
   <div class="setting-row">
@@ -611,6 +628,7 @@
 </div>
 
 <!-- Exercise editor -->
+</div><!-- end mainApp -->
 <div class="editor-section" id="editorSection" style="display:none">
   <div class="editor-header">
     <span class="editor-title">Exercise list</span>
@@ -649,8 +667,8 @@
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn-ghost" style="font-size:13px;padding:10px 18px" onclick="closeWorkoutModal(false)">Skip logging</button>
-      <button class="btn-done" style="font-size:13px;padding:10px 20px" onclick="closeWorkoutModal(true)">Save</button>
+      <button class="btn-ghost" id="modalSkipBtn" style="font-size:13px;padding:10px 18px">Skip logging</button>
+      <button class="btn-done" id="modalSaveBtn" style="font-size:13px;padding:10px 20px">Save</button>
     </div>
   </div>
 </div>
@@ -667,6 +685,146 @@
 <div class="notification" id="notification"></div>
 
 <script>
+// ── Supabase ──
+const SUPABASE_URL = 'https://rzzbffxmtkzatinpjmxt.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_cTyFG-rSNn3MLazHPOy4iQ_Z51Zz4oU';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser = null;
+
+async function initAuth() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    showApp();
+  } else {
+    document.getElementById('authScreen').style.display = 'flex';
+  }
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (session) {
+      currentUser = session.user;
+      showApp();
+    } else {
+      currentUser = null;
+      document.getElementById('mainApp').style.display = 'none';
+      document.getElementById('authScreen').style.display = 'flex';
+    }
+  });
+}
+
+function showApp() {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'block';
+  initApp();
+}
+
+// ── Auth UI ──
+let authMode = 'signin';
+document.getElementById('authToggleBtn').addEventListener('click', () => {
+  authMode = authMode === 'signin' ? 'signup' : 'signin';
+  document.getElementById('authTitle').textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
+  document.getElementById('authSubmitBtn').textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
+  document.getElementById('authToggleBtn').textContent = authMode === 'signin' ? 'No account? Sign up' : 'Already have an account? Sign in';
+  document.getElementById('authError').style.display = 'none';
+});
+
+document.getElementById('authSubmitBtn').addEventListener('click', async () => {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl = document.getElementById('authError');
+  errEl.style.display = 'none';
+  if (!email || !password) { errEl.textContent = 'Please enter email and password.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('authSubmitBtn');
+  btn.textContent = '...';
+  btn.disabled = true;
+
+  let error;
+  if (authMode === 'signin') {
+    ({ error } = await sb.auth.signInWithPassword({ email, password }));
+  } else {
+    ({ error } = await sb.auth.signUp({ email, password }));
+    if (!error) { errEl.style.color = '#10b981'; errEl.textContent = 'Check your email to confirm your account.'; errEl.style.display = 'block'; }
+  }
+
+  btn.textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
+  btn.disabled = false;
+  if (error) { errEl.style.color = '#f43f5e'; errEl.textContent = error.message; errEl.style.display = 'block'; }
+});
+
+// ── Supabase DB sync ──
+async function syncLogToDB(entry) {
+  if (!currentUser) return;
+  try {
+    await sb.from('workout_log').insert({
+      user_id: currentUser.id,
+      exercise_name: entry.name,
+      category: entry.category,
+      how: entry.how,
+      reps: entry.detail?.reps || null,
+      sets: entry.detail?.sets || null,
+      weight: entry.detail?.weight || null,
+      logged_at: new Date().toISOString()
+    });
+  } catch(e) { console.error('DB sync error:', e); }
+}
+
+async function loadLogsFromDB() {
+  if (!currentUser) return;
+  try {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const { data, error } = await sb.from('workout_log')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .gte('logged_at', today.toISOString())
+      .order('logged_at', { ascending: false });
+    if (error || !data || data.length === 0) return;
+    // Merge DB entries into dailyLog (DB is source of truth)
+    dailyLog = data.map(r => ({
+      name: r.exercise_name,
+      category: r.category,
+      time: new Date(r.logged_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      how: r.how,
+      detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null
+    }));
+    streak = dailyLog.filter(e => e.how !== 'skip').length;
+    document.getElementById('statDone').textContent = streak;
+    renderLog();
+  } catch(e) { console.error('DB load error:', e); }
+}
+
+async function loadHistoryFromDB() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await sb.from('workout_log')
+      .select('logged_at, exercise_name, category, how, reps, sets, weight')
+      .eq('user_id', currentUser.id)
+      .order('logged_at', { ascending: false });
+    if (error || !data) return;
+    // Group by date
+    const byDay = {};
+    data.forEach(r => {
+      const d = new Date(r.logged_at);
+      const key = 'wbw_' + (d.getFullYear() * 10000 + (d.getMonth()+1) * 100 + d.getDate());
+      if (!byDay[key]) byDay[key] = [];
+      byDay[key].push({
+        name: r.exercise_name,
+        category: r.category,
+        time: d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        how: r.how,
+        detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null
+      });
+    });
+    // Cache in localStorage for offline access
+    Object.entries(byDay).forEach(([key, entries]) => {
+      if (key !== TODAY_KEY) {
+        try { localStorage.setItem(key, JSON.stringify({ log: entries })); } catch(e) {}
+      }
+    });
+    renderLog();
+  } catch(e) { console.error('DB history error:', e); }
+}
+
 const DEFAULT_EXERCISES = [
   { name: "Jumping Jacks",            category: "Cardio",     note: "Full power, until failure" },
   { name: "Mountain Climbers",        category: "Cardio",     note: "Drive those knees in fast" },
@@ -743,7 +901,6 @@ let restStartTime = null;    // Date.now() when rest began
 let sessionActive = false;
 let streak = 0;
 let restSeconds = 30;
-let pausedRemaining = null;
 
 const CIRCUMFERENCE = 2 * Math.PI * 118;
 
@@ -853,21 +1010,12 @@ function tick() {
 
 // Re-sync timer display when tab becomes visible again
 document.addEventListener('visibilitychange', () => {
-  if (!sessionActive || document.hidden) return;
-  // Re-check if timer already expired while hidden
+  if (document.hidden) return;
   if (timerStartTime) {
     const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
     if (elapsed >= totalSeconds) {
       clearInterval(timerInterval);
       triggerExercise();
-    }
-  }
-  if (restStartTime) {
-    const restElapsed = Math.floor((Date.now() - restStartTime) / 1000);
-    if (restElapsed >= restSeconds) {
-      clearInterval(restInterval);
-      // restInterval's callback handles completion; restart it to fire immediately
-      restInterval && clearInterval(restInterval);
     }
   }
 });
@@ -981,8 +1129,10 @@ function loadState() {
 function addToLog(ex, how, detail) {
   const now = new Date();
   const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-  dailyLog.unshift({ name: ex.name, category: ex.category, time, how, detail: detail || null });
+  const entry = { name: ex.name, category: ex.category, time, how, detail: detail || null };
+  dailyLog.unshift(entry);
   saveState();
+  syncLogToDB(entry);
   renderLog();
 }
 
@@ -1087,7 +1237,6 @@ function clearLog() {
 
 
 function doneExercise() {
-  if (!sessionActive) return;
   clearInterval(timerInterval);
   const ex = queue[currentIdx % queue.length];
   document.getElementById('btnDone').disabled = true;
@@ -1168,7 +1317,6 @@ function showAllDone() {
   clearInterval(timerInterval);
   clearInterval(restInterval);
   sessionActive = false;
-  document.getElementById('btnStart').textContent = 'Start Session';
   document.getElementById('btnDone').disabled = true;
   document.getElementById('ringLabel').textContent = 'all done!';
   document.getElementById('ringTime').textContent = '🎉';
@@ -1180,44 +1328,37 @@ function showAllDone() {
   document.getElementById('queueList').innerHTML = '<div class="queue-item" style="justify-content:center;color:var(--success)">Nothing left for today ✓</div>';
 }
 
-function toggleTimer() {
-  const btn = document.getElementById('btnStart');
-  if (!sessionActive) {
-    requestNotificationPermission();
-    sessionActive = true;
-    btn.textContent = 'Pause';
-    if (queue.length === 0) rebuildQueue();
+function autoStart() {
+  requestNotificationPermission();
+  sessionActive = true;
+  if (queue.length === 0) rebuildQueue();
+  updateExerciseDisplay();
+  renderQueue();
+  startCountdown();
+}
+
+// Midnight reset — rebuild queue and clear today's state when day rolls over
+function scheduleMidnightReset() {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const msUntilMidnight = midnight - now;
+  setTimeout(() => {
+    dailyLog = [];
+    streak = 0;
+    currentIdx = 0;
+    document.getElementById('statDone').textContent = 0;
+    rebuildQueue();
     updateExerciseDisplay();
     renderQueue();
-    if (pausedRemaining !== null) {
-      // Resume from where we paused
-      totalSeconds = intervalMinutes * 60;
-      timerStartTime = Date.now() - ((totalSeconds - pausedRemaining) * 1000);
-      pausedRemaining = null;
-      clearInterval(timerInterval);
-      timerInterval = setInterval(tick, 1000);
-      document.getElementById('btnDone').disabled = false;
-      document.getElementById('ringSubLabel').textContent = 'keep working!';
-    } else {
-      startCountdown();
-    }
-  } else {
-    sessionActive = false;
-    btn.textContent = 'Resume';
-    // Save remaining time before clearing
-    if (timerStartTime) {
-      const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
-      pausedRemaining = Math.max(0, totalSeconds - elapsed);
-    }
-    clearInterval(timerInterval);
-    clearInterval(restInterval);
-    document.getElementById('ringSubLabel').textContent = 'paused';
-    document.getElementById('btnDone').disabled = true;
-  }
+    renderLog();
+    updateDayProgress();
+    startCountdown();
+    scheduleMidnightReset(); // schedule next day
+  }, msUntilMidnight);
 }
 
 function triggerExercise() {
-  if (!sessionActive) return;
   clearInterval(timerInterval);
   timerStartTime = null;
   const ex = queue[currentIdx % queue.length];
@@ -1236,7 +1377,6 @@ function triggerExercise() {
 }
 
 function skipExercise() {
-  if (!sessionActive) return;
   const ex = queue[currentIdx % queue.length];
   addToLog(ex, 'skip');
   clearInterval(timerInterval);
@@ -1477,48 +1617,34 @@ function removeFromQueue(name) {
   }
 }
 
-// ── Init
-loadSettings();
-rebuildQueue();
-loadState();
-viewingDay = TODAY_KEY;
-updateExerciseDisplay();
-renderQueue();
-renderLog();
-updateDayProgress();
+// ── Init (called after auth) ──
+function initApp() {
+  loadSettings();
+  rebuildQueue();
+  loadState();
+  viewingDay = TODAY_KEY;
+  updateExerciseDisplay();
+  renderQueue();
+  renderLog();
+  updateDayProgress();
 
-updateRing(1, 1);
-document.getElementById('ringProgress').style.stroke = '#3b82f6';
-document.getElementById('ringProgress').style.strokeDasharray = CIRCUMFERENCE;
-document.getElementById('ringProgress').style.strokeDashoffset = 0;
-document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
+  updateRing(1, 1);
+  document.getElementById('ringProgress').style.stroke = '#3b82f6';
+  document.getElementById('ringProgress').style.strokeDasharray = CIRCUMFERENCE;
+  document.getElementById('ringProgress').style.strokeDashoffset = 0;
+  document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
 
-// ── Debug panel ──
-(function() {
-  const msgs = [];
-  try {
-    localStorage.setItem('wbw_test', '1');
-    localStorage.removeItem('wbw_test');
-    msgs.push('✓ localStorage works');
-  } catch(e) {
-    msgs.push('✗ localStorage FAILED: ' + e.message);
-  }
-  msgs.push('TODAY_KEY: ' + TODAY_KEY);
-  try {
-    const raw = localStorage.getItem(TODAY_KEY);
-    msgs.push('Raw saved: ' + (raw ? raw.substring(0, 100) : 'NONE'));
-    msgs.push('Loaded log entries: ' + dailyLog.length);
-    msgs.push('Loaded streak: ' + streak);
-    msgs.push('All wbw_ keys: ' + Object.keys(localStorage).filter(k => k.startsWith('wbw_')).join(', '));
-  } catch(e) {
-    msgs.push('Read error: ' + e.message);
-  }
-  const div = document.createElement('div');
-  div.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#111;color:#0f0;font:11px monospace;padding:8px;z-index:9999;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
-  div.textContent = msgs.join('\n');
-  div.onclick = () => div.remove();
-  document.body.appendChild(div);
-})();
+  document.getElementById('modalSaveBtn').addEventListener('click', () => closeWorkoutModal(true));
+  document.getElementById('modalSkipBtn').addEventListener('click', () => closeWorkoutModal(false));
+
+  autoStart();
+  scheduleMidnightReset();
+
+  // Load today from DB (overrides localStorage), then full history
+  loadLogsFromDB().then(() => loadHistoryFromDB());
+}
+
+initAuth();
 </script>
 </body>
 </html>
