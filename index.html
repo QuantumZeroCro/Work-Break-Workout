@@ -1391,6 +1391,9 @@ async function deleteLogEntry(idx) {
 
 function doneExercise() {
   clearInterval(timerInterval);
+  const ex = queue[currentIdx % queue.length];
+  if (!ex) return;
+  document.getElementById('btnDone').disabled = true;
 
   openWorkoutModal(ex, (detail) => {
     notify(`✓ Done — ${ex.name}`);
