@@ -658,6 +658,10 @@
     <label>Shuffle exercises</label>
     <input type="checkbox" id="shuffleCheck" checked onchange="rebuildQueue();saveState()">
   </div>
+  <div class="setting-row">
+    <label style="color:#f43f5e">Reset today</label>
+    <button onclick="resetDay()" style="background:#f43f5e;color:#fff;font-size:12px;padding:7px 14px;border:none;border-radius:8px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600">Reset</button>
+  </div>
 </div>
 
 <!-- Queue -->
@@ -1292,6 +1296,39 @@ function renderLogForKey(key) {
   }).join('');
 }
 
+async function resetDay() {
+  if (!confirm('Reset today? This will clear all logs for today and restore the full exercise queue.')) return;
+
+  // Delete today's logs from Supabase
+  if (currentUser) {
+    try {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      await sb.from('workout_log')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .gte('logged_at', today.toISOString());
+    } catch(e) { console.error('reset error:', e); }
+  }
+
+  // Clear local state
+  dailyLog = [];
+  streak = 0;
+  currentIdx = 0;
+  document.getElementById('statDone').textContent = 0;
+  saveState();
+
+  // Rebuild queue fresh
+  rebuildQueue();
+  syncQueueWithLog();
+  updateExerciseDisplay();
+  renderQueue();
+  renderLog();
+  updateDayProgress();
+  startCountdown();
+
+  notify('Day reset ✓');
+}
+
 function clearLog() {
   if (viewingDay !== TODAY_KEY) return;
   dailyLog = [];
@@ -1715,7 +1752,8 @@ async function renderHistory() {
         detStr = parts.join(' · ');
       }
       const skipTag = e.how === 'skip' ? '<span style="color:var(--muted);font-size:10px;margin-left:4px">skipped</span>' : '';
-      const delBtn = e.id ? `<button class="history-del" onclick="deleteHistoryEntry('${e.id}', this)" title="Delete">×</button>` : '';
+      const entryIdx = entries.indexOf(e);
+      const delBtn = `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" onclick="deleteHistoryEntry(this)" title="Delete">×</button>`;
       return `<div class="history-entry">
         <div class="log-dot" style="background:${color};flex-shrink:0"></div>
         <span class="history-entry-name">${e.name}${skipTag}</span>
@@ -1738,13 +1776,41 @@ function toggleHistoryDay(id) {
   document.getElementById(id).classList.toggle('open');
 }
 
-async function deleteHistoryEntry(dbId, btn) {
-  if (!currentUser) return;
-  try {
-    await sb.from('workout_log').delete().eq('id', dbId).eq('user_id', currentUser.id);
-    // Remove the row from DOM
-    btn.closest('.history-entry').remove();
-  } catch(e) { console.error('history delete error:', e); }
+async function deleteHistoryEntry(btn) {
+  const dbId = btn.dataset.dbid;
+  const dayKey = btn.dataset.daykey;
+  const idx = parseInt(btn.dataset.idx);
+
+  // Delete from Supabase if we have an id
+  if (currentUser && dbId) {
+    try {
+      await sb.from('workout_log').delete().eq('id', dbId).eq('user_id', currentUser.id);
+    } catch(e) { console.error('history delete error:', e); }
+  }
+
+  // If today, also remove from dailyLog
+  if ('wbw_' + dayKey === TODAY_KEY || dayKey === String(getTodaySeed())) {
+    if (idx >= 0 && idx < dailyLog.length) {
+      dailyLog.splice(idx, 1);
+      streak = dailyLog.filter(e => e.how !== 'skip').length;
+      document.getElementById('statDone').textContent = streak;
+      saveState();
+      renderLog();
+    }
+  } else {
+    // Remove from localStorage cache for that day
+    try {
+      const key = 'wbw_' + dayKey;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const data = JSON.parse(raw);
+        data.log.splice(idx, 1);
+        localStorage.setItem(key, JSON.stringify(data));
+      }
+    } catch(e) {}
+  }
+
+  btn.closest('.history-entry').remove();
 }
 function openManualLog() {
   document.getElementById('pickerSearch').value = '';
