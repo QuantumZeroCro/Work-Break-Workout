@@ -585,7 +585,7 @@
   </div>
   <div class="setting-row">
     <label>Rest duration</label>
-    <input type="range" id="restSlider" min="10" max="300" value="30" step="5" oninput="updateRest(this.value)">
+    <input type="range" id="restSlider" min="1" max="300" value="30" step="5" oninput="updateRest(this.value)">
     <span id="restVal">30 sec</span>
   </div>
   <div class="setting-row">
@@ -1441,11 +1441,14 @@ function selectManualExercise(name) {
   closeManualLog();
   setTimeout(() => {
     openWorkoutModal(ex, (detail) => {
+      console.log('modal callback fired, detail:', detail);
       addToLog(ex, 'manual', detail);
+      console.log('after addToLog, dailyLog length:', dailyLog.length);
       removeFromQueue(ex.name);
       streak++;
       document.getElementById('statDone').textContent = streak;
       saveState();
+      console.log('after saveState, checking localStorage:', localStorage.getItem(TODAY_KEY));
       notify(`✓ Logged — ${ex.name}`);
     });
   }, 150);
