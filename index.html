@@ -39,6 +39,7 @@
     padding: 24px 16px 40px;
     gap: 28px;
     width: 100%;
+    min-height: 100vh;
   }
 
   header {
@@ -584,7 +585,7 @@
 </div>
 
 <!-- Main app -->
-<div id="mainApp" style="display:none">
+<div id="mainApp" style="display:none;width:100%">
 
 <header>
   <h1>Work Break Workout</h1>
@@ -767,7 +768,7 @@ async function initAuth() {
 
 function showApp() {
   document.getElementById('authScreen').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'block';
+  document.getElementById('mainApp').style.display = '';
   initApp();
 }
 
@@ -842,6 +843,7 @@ async function loadLogsFromDB() {
     }));
     streak = dailyLog.filter(e => e.how !== 'skip').length;
     document.getElementById('statDone').textContent = streak;
+    syncQueueWithLog();
     renderLog();
   } catch(e) { console.error('DB load error:', e); }
 }
@@ -1766,15 +1768,34 @@ function logAgain(name) {
 }
 
 function removeFromQueue(name) {
-  // Find first occurrence of this exercise at or after currentIdx and remove it
-  const idx = queue.findIndex((e, i) => i >= currentIdx && e.name === name);
-  if (idx !== -1) {
-    queue.splice(idx, 1);
-    // Don't change currentIdx — everything shifts forward naturally
+  // Remove ALL occurrences of this exercise from the queue at or after currentIdx
+  let removed = false;
+  for (let i = queue.length - 1; i >= currentIdx; i--) {
+    if (queue[i].name === name) {
+      queue.splice(i, 1);
+      removed = true;
+    }
+  }
+  if (removed) {
     updateDayProgress();
     renderQueue();
     updateExerciseDisplay();
   }
+}
+
+function syncQueueWithLog() {
+  // Remove from queue any exercise already logged today as 'done' or 'manual'
+  const doneNames = new Set(
+    dailyLog.filter(e => e.how === 'done' || e.how === 'manual').map(e => e.name)
+  );
+  for (let i = queue.length - 1; i >= currentIdx; i--) {
+    if (doneNames.has(queue[i].name)) {
+      queue.splice(i, 1);
+    }
+  }
+  updateDayProgress();
+  renderQueue();
+  updateExerciseDisplay();
 }
 
 // ── Init (called after auth) ──
@@ -1782,6 +1803,7 @@ function initApp() {
   loadSettings();
   rebuildQueue();
   loadState();
+  syncQueueWithLog(); // remove already-done exercises from queue
   viewingDay = TODAY_KEY;
   updateExerciseDisplay();
   renderQueue();
