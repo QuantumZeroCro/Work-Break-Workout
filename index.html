@@ -1480,15 +1480,13 @@ function startSession() {
   if (queue.length === 0) rebuildQueue();
   updateExerciseDisplay();
   renderQueue();
-  // Immediately show first exercise
   triggerExercise();
-  subscribeRealtime();
 }
 
 let realtimeChannel = null;
 function subscribeRealtime() {
   if (!currentUser) return;
-  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+  if (realtimeChannel) sb.removeChannel(realtimeChannel);
 
   realtimeChannel = sb.channel('workout_log_changes')
     .on('postgres_changes', {
