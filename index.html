@@ -861,7 +861,7 @@ async function syncLogToDB(entry) {
 }
 
 async function loadLogsFromDB() {
-  if (!currentUser) return;
+  if (!currentUser) return null;
   try {
     const today = new Date(); today.setHours(0,0,0,0);
     const { data, error } = await sb.from('workout_log')
@@ -869,8 +869,7 @@ async function loadLogsFromDB() {
       .eq('user_id', currentUser.id)
       .gte('logged_at', today.toISOString())
       .order('logged_at', { ascending: false });
-    if (error || !data || data.length === 0) return;
-    // Merge DB entries into dailyLog (DB is source of truth)
+    if (error || !data || data.length === 0) return null;
     dailyLog = data.map(r => ({
       name: r.exercise_name,
       category: r.category,
@@ -882,7 +881,9 @@ async function loadLogsFromDB() {
     document.getElementById('statDone').textContent = streak;
     syncQueueWithLog();
     renderLog();
-  } catch(e) { console.error('DB load error:', e); }
+    // Return the most recent log timestamp (data is ordered desc)
+    return new Date(data[0].logged_at);
+  } catch(e) { console.error('DB load error:', e); return null; }
 }
 
 async function loadHistoryFromDB() {
@@ -2000,7 +2001,7 @@ function syncQueueWithLog() {
 }
 
 // ── Init (called after auth) ──
-function initApp() {
+async function initApp() {
   loadSettings();
   rebuildQueue();
   loadState();
@@ -2021,7 +2022,38 @@ function initApp() {
   document.getElementById('modalSkipBtn').addEventListener('click', () => closeWorkoutModal(false));
 
   subscribeRealtime();
-  loadLogsFromDB().then(() => loadHistoryFromDB());
+
+  const lastLoggedAt = await loadLogsFromDB();
+  loadHistoryFromDB();
+
+  if (lastLoggedAt) {
+    // Resume session — calculate time since last log
+    const secondsSinceLog = Math.floor((Date.now() - lastLoggedAt.getTime()) / 1000);
+    const intervalSec = intervalMinutes * 60;
+    sessionActive = true;
+    document.getElementById('btnStart').disabled = true;
+    document.getElementById('btnStart').textContent = 'Session active';
+
+    if (secondsSinceLog >= intervalSec) {
+      // Interval already passed — immediately show next exercise
+      triggerExercise();
+    } else {
+      // Resume countdown with remaining time
+      totalSeconds = intervalSec;
+      timerStartTime = lastLoggedAt.getTime();
+      exerciseTriggered = false;
+      document.getElementById('ringLabel').textContent = 'next exercise in';
+      document.getElementById('ringSubLabel').textContent = 'keep working!';
+      document.getElementById('exerciseCard').classList.remove('active');
+      document.getElementById('btnDone').disabled = true;
+      document.getElementById('btnSkip').disabled = true;
+      clearInterval(timerInterval);
+      timerInterval = setInterval(tick, 1000);
+      const remaining = intervalSec - secondsSinceLog;
+      updateRing(remaining, totalSeconds);
+      document.getElementById('ringTime').textContent = formatTime(remaining);
+    }
+  }
 }
 
 // ── Boot ──
