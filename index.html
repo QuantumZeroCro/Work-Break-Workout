@@ -655,11 +655,6 @@
     <span id="intervalVal">30 min</span>
   </div>
   <div class="setting-row">
-    <label>Rest duration</label>
-    <input type="range" id="restSlider" min="1" max="300" value="30" step="1" oninput="updateRest(this.value)">
-    <span id="restVal">30 sec</span>
-  </div>
-  <div class="setting-row">
     <label>Shuffle exercises</label>
     <input type="checkbox" id="shuffleCheck" checked onchange="rebuildQueue();saveState()">
   </div>
@@ -989,11 +984,8 @@ let intervalMinutes = 30;
 let totalSeconds = 0;
 let timerStartTime = null;   // Date.now() when current countdown began
 let timerInterval = null;
-let restInterval = null;
-let restStartTime = null;    // Date.now() when rest began
 let sessionActive = false;
 let streak = 0;
-let restSeconds = 30;
 
 const CIRCUMFERENCE = 2 * Math.PI * 118;
 
@@ -1161,7 +1153,6 @@ function saveState() {
     const shuffleEl = document.getElementById('shuffleCheck');
     localStorage.setItem('wbw_settings', JSON.stringify({
       intervalMinutes,
-      restSeconds,
       shuffle: shuffleEl ? shuffleEl.checked : true
     }));
   } catch(e) { console.error('saveState error:', e); }
@@ -1176,11 +1167,6 @@ function loadSettings() {
       intervalMinutes = s.intervalMinutes;
       document.getElementById('intervalSlider').value = intervalMinutes;
       document.getElementById('intervalVal').textContent = intervalMinutes + ' min';
-    }
-    if (s.restSeconds) {
-      restSeconds = s.restSeconds;
-      document.getElementById('restSlider').value = restSeconds;
-      updateRest(restSeconds);
     }
     if (s.shuffle !== undefined) {
       document.getElementById('shuffleCheck').checked = s.shuffle;
@@ -1328,7 +1314,6 @@ async function resetDay() {
   saveState();
 
   clearInterval(timerInterval);
-  clearInterval(restInterval);
   sessionActive = false;
   document.getElementById('btnStart').disabled = false;
   document.getElementById('btnStart').textContent = 'Start Session';
@@ -1395,14 +1380,7 @@ function doneExercise() {
     document.getElementById('statDone').textContent = streak;
     saveState();
 
-    // Brief rest before next exercise countdown
-    document.getElementById('ringLabel').textContent = 'rest';
-    document.getElementById('ringTime').textContent = formatTime(restSeconds);
-    document.getElementById('ringSubLabel').textContent = 'next up soon…';
-    document.getElementById('ringProgress').style.stroke = '#10b981';
-    document.getElementById('exerciseCard').classList.remove('active');
-
-    startRest(() => {
+    (() => {
       currentIdx++;
       saveState();
       updateDayProgress();
@@ -1424,40 +1402,16 @@ function startCountdown() {
   document.getElementById('ringLabel').textContent = 'next exercise in';
   document.getElementById('ringSubLabel').textContent = 'keep working!';
   document.getElementById('exerciseCard').classList.remove('active');
-  document.getElementById('btnDone').disabled = true;
-  document.getElementById('btnSkip').disabled = true;
+  document.getElementById('btnDone').disabled = false;
+  document.getElementById('btnSkip').disabled = false;
   clearInterval(timerInterval);
   timerInterval = setInterval(tick, 1000);
   updateRing(totalSeconds, totalSeconds);
   document.getElementById('ringTime').textContent = formatTime(totalSeconds);
 }
 
-function startRest(onComplete) {
-  if (restSeconds <= 0) { onComplete(); return; }
-  restStartTime = Date.now();
-  clearInterval(restInterval);
-  document.getElementById('btnDone').disabled = true;
-  document.getElementById('ringLabel').textContent = 'rest';
-  document.getElementById('ringSubLabel').textContent = 'catch your breath';
-  updateRing(restSeconds, restSeconds);
-  document.getElementById('ringTime').textContent = formatTime(restSeconds);
-
-  restInterval = setInterval(() => {
-    const restElapsed = Math.floor((Date.now() - restStartTime) / 1000);
-    const remaining = restSeconds - restElapsed;
-    document.getElementById('ringTime').textContent = formatTime(Math.max(0, remaining));
-    updateRing(Math.max(0, remaining), restSeconds);
-    if (remaining <= 0) {
-      clearInterval(restInterval);
-      restStartTime = null;
-      onComplete();
-    }
-  }, 1000);
-}
-
 function showAllDone() {
   clearInterval(timerInterval);
-  clearInterval(restInterval);
   sessionActive = false;
   document.getElementById('btnStart').disabled = false;
   document.getElementById('btnStart').textContent = 'Start Session';
@@ -1518,7 +1472,7 @@ function subscribeRealtime() {
         // If we're currently waiting on this exercise, advance
         const currentEx = queue[currentIdx % queue.length];
         if (currentEx && currentEx.name === entry.name) {
-          startRest(() => {
+          (() => {
             currentIdx++;
             saveState();
             updateDayProgress();
@@ -1642,14 +1596,6 @@ function updateInterval(val) {
   saveState();
 }
 
-function updateRest(val) {
-  restSeconds = parseInt(val);
-  const label = restSeconds >= 60
-    ? (restSeconds % 60 === 0 ? (restSeconds / 60) + ' min' : Math.floor(restSeconds / 60) + 'm ' + (restSeconds % 60) + 's')
-    : restSeconds + ' sec';
-  document.getElementById('restVal').textContent = label;
-  saveState();
-}
 
 function toggleSettings() {
   document.getElementById('settingsPanel').classList.toggle('open');
