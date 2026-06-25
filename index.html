@@ -8,7 +8,6 @@
   <meta name="theme-color" content="#0e0f11" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="manifest" href="manifest.json" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
@@ -105,6 +104,11 @@
     font-weight: 700;
     color: var(--text);
     line-height: 1;
+    transition: color 0.3s, font-size 0.3s;
+  }
+  .ring-time.go {
+    font-size: 72px;
+    color: #10b981;
   }
   .ring-sublabel {
     font-size: 11px;
@@ -339,9 +343,9 @@
     font-size: 14px;
     padding: 12px 28px;
   }
-  .btn-done:hover { background: #34d399; transform: translateY(-1px); }
-  .btn-done:active { transform: translateY(0); }
-  .btn-done:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  .btn-done:hover:not(:disabled) { background: #34d399; transform: translateY(-1px); }
+  .btn-done:active:not(:disabled) { transform: translateY(0); }
+  .btn-done:disabled { background: #2a2d35; color: #4b5563; cursor: not-allowed; transform: none; }
 
   /* ── Daily log ── */
   .log-section {
@@ -599,7 +603,10 @@
 <div id="mainApp" style="display:none;width:100%">
 
 <header>
-  <h1>Work Break Workout</h1>
+  <div>
+    <h1>Work Break Workout</h1>
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.1em;margin-top:2px">v0.23</div>
+  </div>
   <button onclick="sb.auth.signOut()" style="background:none;border:1px solid var(--surface2);color:var(--muted);font-family:'Space Grotesk',sans-serif;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer">Sign out</button>
 </header>
 
@@ -1105,15 +1112,23 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// ── Service Worker za notifikacije ──
+// ── Notifikacije ──
 let swRegistration = null;
 
 async function initServiceWorker() {
-  if (!('serviceWorker' in navigator)) return;
-  try {
-    swRegistration = await navigator.serviceWorker.register('sw.js', { scope: '/Work-Break-Workout/' });
-    await navigator.serviceWorker.ready;
-  } catch(e) { console.error('SW registration failed:', e); }
+  // sw.js removed — basic notifications only
+}
+
+function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function sendNotification(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try { new Notification(title, { body, tag: 'workout', renotify: true }); } catch(e) {}
 }
 
 function requestNotificationPermission() {
@@ -1368,9 +1383,11 @@ async function deleteLogEntry(idx) {
 }
 
 function doneExercise() {
+  console.log('doneExercise called, currentIdx:', currentIdx, 'queue.length:', queue.length);
   clearInterval(timerInterval);
   const ex = queue[currentIdx % queue.length];
-  if (!ex) return;
+  console.log('ex:', ex);
+  if (!ex) { console.error('no exercise found!'); return; }
   document.getElementById('btnDone').disabled = true;
 
   openWorkoutModal(ex, (detail) => {
@@ -1391,7 +1408,7 @@ function doneExercise() {
       updateExerciseDisplay();
       renderQueue();
       startCountdown();
-    });
+    })();
   });
 }
 
@@ -1401,6 +1418,7 @@ function startCountdown() {
   timerStartTime = Date.now();
   document.getElementById('ringLabel').textContent = 'next exercise in';
   document.getElementById('ringSubLabel').textContent = 'keep working!';
+  document.getElementById('ringTime').classList.remove('go');
   document.getElementById('exerciseCard').classList.remove('active');
   document.getElementById('btnDone').disabled = false;
   document.getElementById('btnSkip').disabled = false;
@@ -1534,6 +1552,7 @@ function triggerExercise() {
 
   document.getElementById('ringLabel').textContent = 'exercise time!';
   document.getElementById('ringTime').textContent = 'GO!';
+  document.getElementById('ringTime').classList.add('go');
   document.getElementById('ringSubLabel').textContent = 'press Done when finished';
   document.getElementById('ringProgress').style.stroke = '#10b981';
   document.getElementById('exerciseCard').classList.add('active');
