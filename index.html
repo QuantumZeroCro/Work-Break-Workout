@@ -605,7 +605,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.1em;margin-top:2px">v0.25</div>
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.1em;margin-top:2px">v0.23</div>
   </div>
   <button onclick="sb.auth.signOut()" style="background:none;border:1px solid var(--surface2);color:var(--muted);font-family:'Space Grotesk',sans-serif;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer">Sign out</button>
 </header>
@@ -1112,45 +1112,8 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// ── Notifikacije ──
-let swRegistration = null;
 
-async function initServiceWorker() {
-  // sw.js removed — basic notifications only
-}
 
-function requestNotificationPermission() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-}
-
-function sendNotification(title, body) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  try { new Notification(title, { body, tag: 'workout', renotify: true }); } catch(e) {}
-}
-
-function requestNotificationPermission() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') {
-    Notification.requestPermission().then(p => {
-      if (p === 'granted') initServiceWorker();
-    });
-  } else if (Notification.permission === 'granted') {
-    initServiceWorker();
-  }
-}
-
-function sendNotification(title, body) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  // Use SW if available (works with screen off), else fallback
-  if (swRegistration && swRegistration.active) {
-    swRegistration.active.postMessage({ type: 'NOTIFY', title, body });
-  } else {
-    try { new Notification(title, { body }); } catch(e) {}
-  }
-}
 
 let dailyLog = [];
 let viewingDay = null; // set after TODAY_KEY is defined
@@ -1446,7 +1409,6 @@ function showAllDone() {
 }
 
 function startSession() {
-  requestNotificationPermission();
   sessionActive = true;
   document.getElementById('btnStart').disabled = true;
   document.getElementById('btnStart').textContent = 'Session active';
@@ -1546,9 +1508,7 @@ function triggerExercise() {
   if (!ex) { exerciseTriggered = false; return; }
 
   notify(`⚡ ${ex.name}`);
-  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   playBeep();
-  sendNotification('Time to exercise! ⚡', ex.name + ' — ' + ex.note);
 
   document.getElementById('ringLabel').textContent = 'exercise time!';
   document.getElementById('ringTime').textContent = 'GO!';
