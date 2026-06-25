@@ -605,7 +605,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.1em;margin-top:2px">v0.23</div>
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.1em;margin-top:2px">v0.25</div>
   </div>
   <button onclick="sb.auth.signOut()" style="background:none;border:1px solid var(--surface2);color:var(--muted);font-family:'Space Grotesk',sans-serif;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer">Sign out</button>
 </header>
@@ -645,8 +645,8 @@
 <!-- Controls -->
 <div class="controls">
   <button class="btn-primary" id="btnStart" onclick="startSession()">Start Session</button>
-  <button class="btn-done" id="btnDone" onclick="doneExercise()" disabled>✓ Done</button>
-  <button class="btn-ghost" id="btnSkip" onclick="skipExercise()" disabled>Skip →</button>
+  <button class="btn-done" id="btnDone" onclick="doneExercise()">✓ Done</button>
+  <button class="btn-ghost" id="btnSkip" onclick="skipExercise()">Skip →</button>
   <button class="btn-ghost" onclick="toggleSettings()">⚙ Settings</button>
   <button class="btn-ghost" onclick="toggleEditor()">✎ Exercises</button>
   <button class="btn-ghost" onclick="openHistory()">📅 History</button>
@@ -2010,8 +2010,8 @@ async function initApp() {
       document.getElementById('ringLabel').textContent = 'next exercise in';
       document.getElementById('ringSubLabel').textContent = 'keep working!';
       document.getElementById('exerciseCard').classList.remove('active');
-      document.getElementById('btnDone').disabled = true;
-      document.getElementById('btnSkip').disabled = true;
+      document.getElementById('btnDone').disabled = false;
+      document.getElementById('btnSkip').disabled = false;
       clearInterval(timerInterval);
       timerInterval = setInterval(tick, 1000);
       const remaining = intervalSec - secondsSinceLog;
