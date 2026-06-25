@@ -637,8 +637,9 @@
 
 <!-- Controls -->
 <div class="controls">
+  <button class="btn-primary" id="btnStart" onclick="startSession()">Start Session</button>
   <button class="btn-done" id="btnDone" onclick="doneExercise()" disabled>✓ Done</button>
-  <button class="btn-ghost" onclick="skipExercise()">Skip →</button>
+  <button class="btn-ghost" id="btnSkip" onclick="skipExercise()" disabled>Skip →</button>
   <button class="btn-ghost" onclick="toggleSettings()">⚙ Settings</button>
   <button class="btn-ghost" onclick="toggleEditor()">✎ Exercises</button>
   <button class="btn-ghost" onclick="openHistory()">📅 History</button>
@@ -1325,16 +1326,20 @@ async function resetDay() {
   document.getElementById('statDone').textContent = 0;
   saveState();
 
-  // Rebuild queue fresh
+  clearInterval(timerInterval);
+  clearInterval(restInterval);
+  sessionActive = false;
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStart').textContent = 'Start Session';
+  document.getElementById('btnDone').disabled = true;
+  document.getElementById('btnSkip').disabled = true;
+
   rebuildQueue();
   syncQueueWithLog();
   updateExerciseDisplay();
   renderQueue();
   updateDayProgress();
-  clearInterval(timerInterval);
-  clearInterval(restInterval);
-  startCountdown();
-  document.getElementById('btnDone').disabled = false;
+  renderLog();
 
   notify('Day reset ✓');
 }
@@ -1412,25 +1417,18 @@ function doneExercise() {
 }
 
 function startCountdown() {
-  // Anchor to 00:01 — intervals run from midnight+1min
-  const now = new Date();
-  const anchor = new Date(now); anchor.setHours(0, 1, 0, 0);
-  if (now < anchor) anchor.setDate(anchor.getDate() - 1);
-  const secondsSinceAnchor = Math.floor((now - anchor) / 1000);
-  const intervalSec = intervalMinutes * 60;
-  const secondsIntoWindow = secondsSinceAnchor % intervalSec;
-  const remaining = intervalSec - secondsIntoWindow;
-
-  totalSeconds = intervalSec;
-  timerStartTime = Date.now() - (secondsIntoWindow * 1000);
+  exerciseTriggered = false;
+  totalSeconds = intervalMinutes * 60;
+  timerStartTime = Date.now();
   document.getElementById('ringLabel').textContent = 'next exercise in';
   document.getElementById('ringSubLabel').textContent = 'keep working!';
   document.getElementById('exerciseCard').classList.remove('active');
+  document.getElementById('btnDone').disabled = true;
+  document.getElementById('btnSkip').disabled = true;
   clearInterval(timerInterval);
   timerInterval = setInterval(tick, 1000);
-  updateRing(remaining, totalSeconds);
-  document.getElementById('ringTime').textContent = formatTime(remaining);
-  document.getElementById('btnDone').disabled = false;
+  updateRing(totalSeconds, totalSeconds);
+  document.getElementById('ringTime').textContent = formatTime(totalSeconds);
 }
 
 function startRest(onComplete) {
@@ -1460,7 +1458,10 @@ function showAllDone() {
   clearInterval(timerInterval);
   clearInterval(restInterval);
   sessionActive = false;
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStart').textContent = 'Start Session';
   document.getElementById('btnDone').disabled = true;
+  document.getElementById('btnSkip').disabled = true;
   document.getElementById('ringLabel').textContent = 'all done!';
   document.getElementById('ringTime').textContent = '🎉';
   document.getElementById('ringSubLabel').textContent = 'come back tomorrow';
@@ -1471,13 +1472,16 @@ function showAllDone() {
   document.getElementById('queueList').innerHTML = '<div class="queue-item" style="justify-content:center;color:var(--success)">Nothing left for today ✓</div>';
 }
 
-function autoStart() {
+function startSession() {
   requestNotificationPermission();
   sessionActive = true;
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStart').textContent = 'Session active';
   if (queue.length === 0) rebuildQueue();
   updateExerciseDisplay();
   renderQueue();
-  startCountdown();
+  // Immediately show first exercise
+  triggerExercise();
   subscribeRealtime();
 }
 
@@ -1560,23 +1564,28 @@ function scheduleMidnightReset() {
   }, msUntilMidnight);
 }
 
+let exerciseTriggered = false;
+
 function triggerExercise() {
+  if (exerciseTriggered) return;
+  exerciseTriggered = true;
   clearInterval(timerInterval);
   timerStartTime = null;
   const ex = queue[currentIdx % queue.length];
+  if (!ex) { exerciseTriggered = false; return; }
 
   notify(`⚡ ${ex.name}`);
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   playBeep();
   sendNotification('Time to exercise! ⚡', ex.name + ' — ' + ex.note);
 
-  // Show exercise, wait for user to press Done
   document.getElementById('ringLabel').textContent = 'exercise time!';
   document.getElementById('ringTime').textContent = 'GO!';
   document.getElementById('ringSubLabel').textContent = 'press Done when finished';
   document.getElementById('ringProgress').style.stroke = '#10b981';
   document.getElementById('exerciseCard').classList.add('active');
   document.getElementById('btnDone').disabled = false;
+  document.getElementById('btnSkip').disabled = false;
 }
 
 function skipExercise() {
@@ -2013,10 +2022,7 @@ function initApp() {
   document.getElementById('modalSaveBtn').addEventListener('click', () => closeWorkoutModal(true));
   document.getElementById('modalSkipBtn').addEventListener('click', () => closeWorkoutModal(false));
 
-  autoStart();
-  scheduleMidnightReset();
-
-  // Load today from DB (overrides localStorage), then full history
+  subscribeRealtime();
   loadLogsFromDB().then(() => loadHistoryFromDB());
 }
 
