@@ -873,6 +873,25 @@
   .queue-remove-prompt.open { display: flex; }
   .queue-remove-msg { font-size: 13px; color: var(--text); line-height: 1.4; }
   .queue-remove-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* ── Modal checkbox row ── */
+  .modal-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .modal-checkbox-row input[type=checkbox] {
+    width: 16px; height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
   .modal-type-toggle {
     display: flex;
     gap: 4px;
@@ -933,7 +952,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.32</div>
+    <div class="app-version">v0.33</div>
   </div>
   <button class="btn-signout" onclick="sb.auth.signOut()">Sign out</button>
 </header>
@@ -1098,10 +1117,21 @@
         <label>Weight (kg) — optional</label>
         <input type="number" id="modalWeight" placeholder="e.g. 20" min="0" step="0.5" />
       </div>
+      <!-- Queue checkbox (shown only when exercise is in queue) -->
+      <div class="modal-field" id="modalFieldQueueRemove" style="display:none">
+        <label class="modal-checkbox-row">
+          <input type="checkbox" id="modalQueueRemove" />
+          <span id="modalQueueRemoveLabel">Remove from today's queue</span>
+        </label>
+      </div>
       <!-- Log time override -->
       <div class="modal-field">
         <label>Log time — optional</label>
-        <input type="time" id="modalLogTime" />
+        <div class="duration-inputs">
+          <input type="number" id="modalLogH" placeholder="HH" min="0" max="23" />
+          <span class="duration-sep">:</span>
+          <input type="number" id="modalLogM" placeholder="MM" min="0" max="59" />
+        </div>
       </div>
     </div>
     <div class="modal-actions">
@@ -1151,15 +1181,6 @@
 </div>
 
 <div class="notification" id="notification"></div>
-
-<!-- Queue-remove prompt (shown after manual log of a queued exercise) -->
-<div class="queue-remove-prompt" id="queueRemovePrompt">
-  <span class="queue-remove-msg"><strong id="queueRemoveName"></strong> is still in today's queue</span>
-  <div class="queue-remove-btns">
-    <button class="btn-cancel-small" onclick="keepInQueueConfirm()">Keep in queue</button>
-    <button class="btn-danger" onclick="removeFromQueueConfirm()">Remove</button>
-  </div>
-</div>
 
 <script>
 // ── Supabase ──
@@ -1253,7 +1274,7 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
 async function syncLogToDB(entry) {
   if (!currentUser) return;
   try {
-    const { data } = await sb.from('workout_log').insert({
+    const { data, error } = await sb.from('workout_log').insert({
       user_id: currentUser.id,
       exercise_name: entry.name,
       category: entry.category,
@@ -1264,8 +1285,16 @@ async function syncLogToDB(entry) {
       duration_seconds: entry.detail?.duration_seconds || null,
       logged_at: entry.loggedAt || new Date().toISOString()
     }).select('id').single();
-    if (data?.id) entry.id = data.id;
-  } catch(e) { console.error('DB sync error:', e); }
+    if (error) throw error;
+    if (data?.id) {
+      entry.id = data.id;
+      saveState(); // persist the id so delete/edit can use it immediately
+    }
+  } catch(e) {
+    console.error('DB sync error:', e);
+    // Entry stays in dailyLog without an id — loadLogsFromDB merge will keep it
+    // and it will be re-attempted on next full load
+  }
 }
 
 async function loadLogsFromDB() {
@@ -1277,8 +1306,10 @@ async function loadLogsFromDB() {
       .eq('user_id', currentUser.id)
       .gte('logged_at', today.toISOString())
       .order('logged_at', { ascending: false });
-    if (error || !data || data.length === 0) return null;
-    dailyLog = data.map(r => ({
+    if (error || !data) return null;
+
+    // Build a map of DB entries by id
+    const dbEntries = data.map(r => ({
       id: r.id,
       name: r.exercise_name,
       category: r.category,
@@ -1289,12 +1320,38 @@ async function loadLogsFromDB() {
         ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
         : null
     }));
+
+    // Merge: start with DB entries, then add any localStorage entries that aren't
+    // in the DB yet (identified by having no id — they were written locally but
+    // the async syncLogToDB hasn't returned yet, or failed)
+    const dbIds = new Set(dbEntries.map(e => e.id));
+    const localOnlyEntries = dailyLog.filter(e => !e.id || !dbIds.has(e.id));
+
+    // Combine and sort by loggedAt descending
+    const merged = [...dbEntries, ...localOnlyEntries].sort((a, b) => {
+      return new Date(b.loggedAt || 0) - new Date(a.loggedAt || 0);
+    });
+
+    // Deduplicate by id (keep first occurrence — DB version wins for entries with ids)
+    const seen = new Set();
+    dailyLog = merged.filter(e => {
+      if (e.id) {
+        if (seen.has(e.id)) return false;
+        seen.add(e.id);
+      }
+      return true;
+    });
+
     streak = dailyLog.filter(e => e.how !== 'skip').length;
     document.getElementById('statDone').textContent = streak;
+    saveState(); // persist the merged result
     syncQueueWithLog();
     renderLog();
-    // Return the most recent log timestamp (data is ordered desc)
-    return new Date(data[0].logged_at);
+
+    if (data.length === 0 && dailyLog.length === 0) return null;
+    // Return the most recent timestamp across both sources
+    const mostRecent = dailyLog[0]?.loggedAt;
+    return mostRecent ? new Date(mostRecent) : null;
   } catch(e) { console.error('DB load error:', e); return null; }
 }
 
@@ -1891,11 +1948,18 @@ function doneExercise() {
   if (!ex) return;
   document.getElementById('btnDone').disabled = true;
 
-  openWorkoutModal(ex, (detail, loggedAt) => {
+  openWorkoutModal(ex, (detail, loggedAt, shouldRemoveFromQueue) => {
     notify(`✓ Done — ${ex.name}`);
     addToLog(ex, 'done', detail, loggedAt);
 
-    currentIdx++;
+    if (shouldRemoveFromQueue) {
+      currentIdx++;
+    } else {
+      // Keep in queue: move current exercise to end
+      queue.splice(currentIdx, 1);
+      queue.push(ex);
+    }
+
     saveState();
     updateDayProgress();
     if (currentIdx >= queue.length) {
@@ -1905,7 +1969,7 @@ function doneExercise() {
     updateExerciseDisplay();
     renderQueue();
     startCountdown();
-  });
+  }, null, 'done');
 }
 
 function startCountdown() {
@@ -2171,10 +2235,30 @@ function setModalType(type) {
   }, 50);
 }
 
-function openWorkoutModal(ex, callback, prefill) {
+let _modalQueueMode = null; // null | 'done' | 'manual'
+
+function openWorkoutModal(ex, callback, prefill, queueMode) {
   _pendingModalEx = ex;
   _pendingModalCallback = callback;
+  _modalQueueMode = queueMode || null;
   document.getElementById('modalExName').textContent = ex.name;
+
+  // Queue checkbox
+  const queueField = document.getElementById('modalFieldQueueRemove');
+  if (queueMode) {
+    queueField.style.display = '';
+    if (queueMode === 'done') {
+      // Done: default is to advance (remove). Checkbox offers to keep it in queue.
+      document.getElementById('modalQueueRemoveLabel').textContent = 'Keep in queue (do again later)';
+      document.getElementById('modalQueueRemove').checked = false;
+    } else {
+      // Manual: default is to remove. Checkbox offers to keep it.
+      document.getElementById('modalQueueRemoveLabel').textContent = 'Remove from today\'s queue';
+      document.getElementById('modalQueueRemove').checked = true;
+    }
+  } else {
+    queueField.style.display = 'none';
+  }
 
   // Determine type from prefill
   const hasDuration = prefill?.duration_seconds != null;
@@ -2193,7 +2277,8 @@ function openWorkoutModal(ex, callback, prefill) {
   }
   document.getElementById('modalSets').value = prefill?.sets || '1';
   document.getElementById('modalWeight').value = prefill?.weight || '';
-  document.getElementById('modalLogTime').value = '';
+  document.getElementById('modalLogH').value = '';
+  document.getElementById('modalLogM').value = '';
 
   document.getElementById('workoutModal').classList.add('open');
   setTimeout(() => {
@@ -2209,11 +2294,11 @@ function closeWorkoutModal(save) {
   if (!_pendingModalCallback) return;
   let detail = null;
   let loggedAt = null;
+  let shouldRemoveFromQueue = true; // default: remove (normal done flow)
 
   if (save) {
     const sets = parseInt(document.getElementById('modalSets').value) || 1;
     const weight = parseFloat(document.getElementById('modalWeight').value) || 0;
-    const timeStr = document.getElementById('modalLogTime').value; // "HH:MM"
 
     if (_modalType === 'duration') {
       const h = parseInt(document.getElementById('modalDurH').value) || 0;
@@ -2226,17 +2311,29 @@ function closeWorkoutModal(save) {
       detail = { reps: reps || null, sets, weight };
     }
 
-    if (timeStr) {
-      const [hh, mm] = timeStr.split(':').map(Number);
+    const lh = parseInt(document.getElementById('modalLogH').value);
+    const lm = parseInt(document.getElementById('modalLogM').value);
+    if (!isNaN(lh) && document.getElementById('modalLogH').value !== '') {
       loggedAt = new Date();
-      loggedAt.setHours(hh, mm, 0, 0);
+      loggedAt.setHours(lh, isNaN(lm) ? 0 : lm, 0, 0);
+    }
+
+    if (_modalQueueMode === 'done') {
+      // Checkbox = "Keep in queue". Checked → don't remove. Unchecked → remove (default).
+      shouldRemoveFromQueue = !document.getElementById('modalQueueRemove').checked;
+    } else if (_modalQueueMode === 'manual') {
+      // Checkbox = "Remove from queue". Checked → remove (default). Unchecked → keep.
+      shouldRemoveFromQueue = document.getElementById('modalQueueRemove').checked;
+    } else {
+      shouldRemoveFromQueue = false;
     }
   }
 
   const cb = _pendingModalCallback;
   _pendingModalCallback = null;
   _pendingModalEx = null;
-  cb(detail, loggedAt);
+  _modalQueueMode = null;
+  cb(detail, loggedAt, shouldRemoveFromQueue);
 }
 
 
@@ -2532,33 +2629,12 @@ function selectManualExercise(name) {
   const isInQueue = queue.slice(currentIdx).some(q => q.name === name);
   closeManualLog();
   setTimeout(() => {
-    openWorkoutModal(ex, (detail, loggedAt) => {
+    openWorkoutModal(ex, (detail, loggedAt, shouldRemoveFromQueue) => {
       addToLog(ex, 'manual', detail, loggedAt);
-      if (isInQueue) {
-        _pendingQueueRemoveName = name;
-        showQueueRemovePrompt(name);
-      }
+      if (isInQueue && shouldRemoveFromQueue) removeFromQueue(ex.name);
       notify(`✓ Logged — ${ex.name}`);
-    });
+    }, null, isInQueue ? 'manual' : null);
   }, 150);
-}
-
-let _pendingQueueRemoveName = null;
-
-function showQueueRemovePrompt(name) {
-  document.getElementById('queueRemoveName').textContent = name;
-  document.getElementById('queueRemovePrompt').classList.add('open');
-}
-
-function removeFromQueueConfirm() {
-  if (_pendingQueueRemoveName) removeFromQueue(_pendingQueueRemoveName);
-  _pendingQueueRemoveName = null;
-  document.getElementById('queueRemovePrompt').classList.remove('open');
-}
-
-function keepInQueueConfirm() {
-  _pendingQueueRemoveName = null;
-  document.getElementById('queueRemovePrompt').classList.remove('open');
 }
 
 function editLogEntry(idx) {
