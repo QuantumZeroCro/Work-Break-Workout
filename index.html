@@ -933,7 +933,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.31</div>
+    <div class="app-version">v0.32</div>
   </div>
   <button class="btn-signout" onclick="sb.auth.signOut()">Sign out</button>
 </header>
@@ -2083,14 +2083,13 @@ function skipExercise() {
   if (!ex) return;
   clearInterval(timerInterval);
 
-  // Track as skipped so it stays excluded from the front of the queue after reload
+  // Track as skipped so it stays at the end after reload
   skippedToday.add(ex.name);
 
   // Move exercise to end of queue — don't log it
   queue.splice(currentIdx, 1);
   queue.push(ex);
 
-  notify(`${ex.name} → moved to end`);
   saveState();
   updateDayProgress();
 
@@ -2098,9 +2097,12 @@ function skipExercise() {
     showAllDone();
     return;
   }
+
   updateExerciseDisplay();
   renderQueue();
-  startCountdown();
+
+  // Immediately show the next exercise — skip doesn't consume timer time
+  triggerExercise();
 }
 
 function updateExerciseDisplay() {
