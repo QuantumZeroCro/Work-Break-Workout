@@ -635,6 +635,26 @@
   .picker-custom-fields select:focus { border-color: var(--accent); }
   .picker-custom-fields select option { background: var(--surface2); }
 
+  /* ── Custom activity templates ── */
+  .custom-templates { margin-bottom: 10px; }
+  .custom-templates-label {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .custom-template-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .custom-template-btn {
+    background: var(--surface2);
+    border: 1px solid var(--surface2);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .custom-template-btn:hover { border-color: var(--accent); color: var(--accent2); }
+
   /* ── Log again button on log entries ── */
   .log-again {
     background: none; border: 1px solid var(--surface2);
@@ -831,6 +851,65 @@
     justify-content: center;
     color: var(--success);
   }
+
+  /* ── Queue-remove prompt ── */
+  .queue-remove-prompt {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 14px;
+    padding: 14px 18px;
+    width: 90%;
+    max-width: 380px;
+    z-index: 998;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .queue-remove-prompt.open { display: flex; }
+  .queue-remove-msg { font-size: 13px; color: var(--text); line-height: 1.4; }
+  .queue-remove-btns { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-type-toggle {
+    display: flex;
+    gap: 4px;
+  }
+  .modal-type-btn {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--surface2);
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .modal-type-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .modal-type-btn:not(.active):hover { color: var(--text); border-color: var(--muted); }
+
+  /* ── Duration hh:mm:ss inputs ── */
+  .duration-inputs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .duration-inputs input {
+    flex: 1;
+    text-align: center;
+    padding: 10px 4px !important;
+  }
+  .duration-sep {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
@@ -854,7 +933,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.28</div>
+    <div class="app-version">v0.29</div>
   </div>
   <button class="btn-signout" onclick="sb.auth.signOut()">Sign out</button>
 </header>
@@ -988,17 +1067,41 @@
     <h3>Log your effort</h3>
     <div class="modal-exercise-name" id="modalExName"></div>
     <div class="modal-fields">
+      <!-- Reps / Duration toggle -->
       <div class="modal-field">
-        <label>Reps / duration</label>
-        <input type="text" id="modalReps" placeholder="e.g. 12 or 45s" />
+        <div class="modal-type-toggle">
+          <button class="modal-type-btn active" id="modalTypeReps" onclick="setModalType('reps')">Reps</button>
+          <button class="modal-type-btn" id="modalTypeDuration" onclick="setModalType('duration')">Duration</button>
+        </div>
+      </div>
+      <!-- Reps input -->
+      <div class="modal-field" id="modalFieldReps">
+        <label>Reps</label>
+        <input type="number" id="modalReps" placeholder="e.g. 12" min="1" />
+      </div>
+      <!-- Duration input (hh:mm:ss) -->
+      <div class="modal-field" id="modalFieldDuration" style="display:none">
+        <label>Duration (hh:mm:ss)</label>
+        <div class="duration-inputs">
+          <input type="number" id="modalDurH" placeholder="00" min="0" max="23" />
+          <span class="duration-sep">:</span>
+          <input type="number" id="modalDurM" placeholder="00" min="0" max="59" />
+          <span class="duration-sep">:</span>
+          <input type="number" id="modalDurS" placeholder="00" min="0" max="59" />
+        </div>
       </div>
       <div class="modal-field">
         <label>Sets</label>
-        <input type="number" id="modalSets" placeholder="e.g. 3" min="1" max="20" value="1" />
+        <input type="number" id="modalSets" placeholder="1" min="1" max="20" value="1" />
       </div>
       <div class="modal-field">
         <label>Weight (kg) — optional</label>
         <input type="number" id="modalWeight" placeholder="e.g. 20" min="0" step="0.5" />
+      </div>
+      <!-- Log time override -->
+      <div class="modal-field">
+        <label>Log time — optional</label>
+        <input type="time" id="modalLogTime" />
       </div>
     </div>
     <div class="modal-actions">
@@ -1024,6 +1127,16 @@
 
     <!-- Custom activity -->
     <div id="pickerPanelCustom" style="display:none">
+      <div class="custom-templates">
+        <div class="custom-templates-label">Quick pick</div>
+        <div class="custom-template-btns">
+          <button class="custom-template-btn" onclick="applyCustomTemplate('Volleyball','Cardio')">🏐 Volleyball</button>
+          <button class="custom-template-btn" onclick="applyCustomTemplate('Padel','Cardio')">🎾 Padel</button>
+          <button class="custom-template-btn" onclick="applyCustomTemplate('Running','Cardio')">🏃 Running</button>
+          <button class="custom-template-btn" onclick="applyCustomTemplate('Sprint','Cardio')">⚡ Sprint</button>
+          <button class="custom-template-btn" onclick="applyCustomTemplate('Cycling','Cardio')">🚴 Cycling</button>
+        </div>
+      </div>
       <div class="picker-custom-fields">
         <input class="picker-search" id="customName" placeholder="Activity name…" />
         <select id="customCat">
@@ -1038,6 +1151,15 @@
 </div>
 
 <div class="notification" id="notification"></div>
+
+<!-- Queue-remove prompt (shown after manual log of a queued exercise) -->
+<div class="queue-remove-prompt" id="queueRemovePrompt">
+  <span class="queue-remove-msg"><strong id="queueRemoveName"></strong> is still in today's queue</span>
+  <div class="queue-remove-btns">
+    <button class="btn-cancel-small" onclick="keepInQueueConfirm()">Keep in queue</button>
+    <button class="btn-danger" onclick="removeFromQueueConfirm()">Remove</button>
+  </div>
+</div>
 
 <script>
 // ── Supabase ──
@@ -1139,9 +1261,9 @@ async function syncLogToDB(entry) {
       reps: entry.detail?.reps || null,
       sets: entry.detail?.sets || null,
       weight: entry.detail?.weight || null,
-      logged_at: new Date().toISOString()
+      duration_seconds: entry.detail?.duration_seconds || null,
+      logged_at: entry.loggedAt || new Date().toISOString()
     }).select('id').single();
-    // Store the DB id back into the entry so deleteLogEntry can use it
     if (data?.id) entry.id = data.id;
   } catch(e) { console.error('DB sync error:', e); }
 }
@@ -1162,7 +1284,10 @@ async function loadLogsFromDB() {
       category: r.category,
       time: new Date(r.logged_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
       how: r.how,
-      detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null
+      loggedAt: r.logged_at,
+      detail: (r.reps || r.sets || r.weight || r.duration_seconds)
+        ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
+        : null
     }));
     streak = dailyLog.filter(e => e.how !== 'skip').length;
     document.getElementById('statDone').textContent = streak;
@@ -1245,7 +1370,7 @@ const DEFAULT_EXERCISES = [
   { name: "90/90 Hip Stretch",        category: "Mobility",   note: "Hold 30s each side" },
   { name: "Lying Stretch Twist",      category: "Mobility",   note: "60s total, both sides" },
   { name: "Pike Push Up",             category: "Pushing",    note: "Max reps, hips high" },
-  { name: "Nordic Curl",              category: "Legs",       note: "Hook feet, lower as slow as you can" },
+  { name: "Reverse Nordic Curl",        category: "Legs",       note: "Kneel, lean forward as slow as you can" },
   { name: "Neck CARs",                category: "Mobility",   note: "5 slow circles each direction" },
   { name: "Hollow Body Hold",         category: "Core",       note: "Hold as long as possible, lower back flat" },
   { name: "Bicep Curl",               category: "Pulling",    note: "Max reps, full range, slow eccentric" },
@@ -1449,15 +1574,13 @@ function loadState() {
   } catch(e) { console.error('loadState error:', e); }
 }
 
-function addToLog(ex, how, detail) {
-  const now = new Date();
+function addToLog(ex, how, detail, loggedAt) {
+  const now = loggedAt || new Date();
   const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-  const entry = { name: ex.name, category: ex.category, time, how, detail: detail || null };
+  const entry = { name: ex.name, category: ex.category, time, how, detail: detail || null, loggedAt: now.toISOString() };
   dailyLog.unshift(entry);
-  if (how !== 'skip') {
-    streak++;
-    document.getElementById('statDone').textContent = streak;
-  }
+  streak++;
+  document.getElementById('statDone').textContent = streak;
   saveState();
   syncLogToDB(entry);
   renderLog();
@@ -1552,9 +1675,17 @@ function renderLogForKey(key) {
     const d = entry.detail;
 
     let detailHtml = '';
-    if (d && !skipped) {
+    if (d) {
       const parts = [];
-      if (d.reps) parts.push(d.sets > 1 ? `${d.sets}×${d.reps}` : d.reps);
+      if (d.duration_seconds) {
+        const h = Math.floor(d.duration_seconds / 3600);
+        const m = Math.floor((d.duration_seconds % 3600) / 60);
+        const s = d.duration_seconds % 60;
+        const dur = [h ? `${h}h` : '', m ? `${m}m` : '', s ? `${s}s` : ''].filter(Boolean).join(' ');
+        parts.push(dur);
+      } else if (d.reps) {
+        parts.push(d.sets > 1 ? `${d.sets}×${d.reps}` : d.reps);
+      }
       if (d.weight > 0) parts.push(`${d.weight}kg`);
       if (parts.length) detailHtml += `<span class="log-detail">${parts.join(' · ')}</span>`;
     }
@@ -1692,9 +1823,9 @@ function doneExercise() {
   if (!ex) return;
   document.getElementById('btnDone').disabled = true;
 
-  openWorkoutModal(ex, (detail) => {
+  openWorkoutModal(ex, (detail, loggedAt) => {
     notify(`✓ Done — ${ex.name}`);
-    addToLog(ex, 'done', detail); // addToLog calls saveState internally
+    addToLog(ex, 'done', detail, loggedAt);
 
     currentIdx++;
     saveState();
@@ -1713,16 +1844,28 @@ function startCountdown() {
   exerciseTriggered = false;
   totalSeconds = intervalMinutes * 60;
   timerStartTime = Date.now();
+
+  const ringTime = document.getElementById('ringTime');
+  const ringProgress = document.getElementById('ringProgress');
+
+  // Force-reset ring colour synchronously (bypass CSS transition briefly)
+  ringProgress.style.transition = 'none';
+  ringProgress.style.stroke = '#3b82f6';
+  // Re-enable transition on next frame so future ticks animate smoothly
+  requestAnimationFrame(() => {
+    ringProgress.style.transition = '';
+  });
+
   document.getElementById('ringLabel').textContent = 'next exercise in';
   document.getElementById('ringSubLabel').textContent = 'keep working!';
-  document.getElementById('ringTime').classList.remove('go');
-  document.getElementById('ringTime').textContent = formatTime(totalSeconds);
+  ringTime.classList.remove('go');
+  ringTime.textContent = formatTime(totalSeconds);
   document.getElementById('exerciseCard').classList.remove('active');
   document.getElementById('btnDone').disabled = false;
   document.getElementById('btnSkip').disabled = false;
   clearInterval(timerInterval);
   timerInterval = setInterval(tick, 1000);
-  updateRing(totalSeconds, totalSeconds); // resets colour back to blue
+  updateRing(totalSeconds, totalSeconds);
 }
 
 function showAllDone() {
@@ -1872,14 +2015,12 @@ function skipExercise() {
   if (!ex) return;
   clearInterval(timerInterval);
 
-  // Move exercise to end of queue before logging so the queue state is consistent
+  // Move exercise to end of queue — don't log it
   queue.splice(currentIdx, 1);
   queue.push(ex);
 
-  // Log the skip (also calls saveState internally)
-  addToLog(ex, 'skip', null);
-
-  notify('Skipped → moved to end');
+  notify(`${ex.name} → moved to end`);
+  saveState();
   updateDayProgress();
 
   if (currentIdx >= queue.length) {
@@ -1940,30 +2081,89 @@ function notify(msg) {
 let _pendingModalCallback = null;
 let _pendingModalEx = null;
 
+let _modalType = 'reps'; // 'reps' or 'duration'
+
+function setModalType(type) {
+  _modalType = type;
+  document.getElementById('modalTypeReps').classList.toggle('active', type === 'reps');
+  document.getElementById('modalTypeDuration').classList.toggle('active', type === 'duration');
+  document.getElementById('modalFieldReps').style.display = type === 'reps' ? '' : 'none';
+  document.getElementById('modalFieldDuration').style.display = type === 'duration' ? '' : 'none';
+  // Focus the right first input
+  setTimeout(() => {
+    const el = type === 'reps'
+      ? document.getElementById('modalReps')
+      : document.getElementById('modalDurH');
+    el && el.focus();
+  }, 50);
+}
+
 function openWorkoutModal(ex, callback, prefill) {
   _pendingModalEx = ex;
   _pendingModalCallback = callback;
   document.getElementById('modalExName').textContent = ex.name;
-  document.getElementById('modalReps').value = prefill?.reps || '';
+
+  // Determine type from prefill
+  const hasDuration = prefill?.duration_seconds != null;
+  setModalType(hasDuration ? 'duration' : 'reps');
+
+  if (hasDuration) {
+    const s = prefill.duration_seconds;
+    document.getElementById('modalDurH').value = Math.floor(s / 3600) || '';
+    document.getElementById('modalDurM').value = Math.floor((s % 3600) / 60) || '';
+    document.getElementById('modalDurS').value = s % 60 || '';
+  } else {
+    document.getElementById('modalReps').value = prefill?.reps || '';
+    document.getElementById('modalDurH').value = '';
+    document.getElementById('modalDurM').value = '';
+    document.getElementById('modalDurS').value = '';
+  }
   document.getElementById('modalSets').value = prefill?.sets || '1';
   document.getElementById('modalWeight').value = prefill?.weight || '';
+  document.getElementById('modalLogTime').value = '';
+
   document.getElementById('workoutModal').classList.add('open');
-  setTimeout(() => document.getElementById('modalReps').focus(), 100);
+  setTimeout(() => {
+    const first = _modalType === 'reps'
+      ? document.getElementById('modalReps')
+      : document.getElementById('modalDurH');
+    first && first.focus();
+  }, 100);
 }
 
 function closeWorkoutModal(save) {
   document.getElementById('workoutModal').classList.remove('open');
   if (!_pendingModalCallback) return;
   let detail = null;
+  let loggedAt = null;
+
   if (save) {
-    const reps = document.getElementById('modalReps').value.trim();
     const sets = parseInt(document.getElementById('modalSets').value) || 1;
     const weight = parseFloat(document.getElementById('modalWeight').value) || 0;
-    detail = { reps, sets, weight };
+    const timeStr = document.getElementById('modalLogTime').value; // "HH:MM"
+
+    if (_modalType === 'duration') {
+      const h = parseInt(document.getElementById('modalDurH').value) || 0;
+      const m = parseInt(document.getElementById('modalDurM').value) || 0;
+      const s = parseInt(document.getElementById('modalDurS').value) || 0;
+      const duration_seconds = h * 3600 + m * 60 + s;
+      detail = { duration_seconds: duration_seconds || null, sets, weight };
+    } else {
+      const reps = document.getElementById('modalReps').value.trim();
+      detail = { reps: reps || null, sets, weight };
+    }
+
+    if (timeStr) {
+      const [hh, mm] = timeStr.split(':').map(Number);
+      loggedAt = new Date();
+      loggedAt.setHours(hh, mm, 0, 0);
+    }
   }
-  _pendingModalCallback(detail);
+
+  const cb = _pendingModalCallback;
   _pendingModalCallback = null;
   _pendingModalEx = null;
+  cb(detail, loggedAt);
 }
 
 
@@ -2108,7 +2308,14 @@ async function renderHistory() {
       let detStr = '';
       if (det) {
         const parts = [];
-        if (det.reps) parts.push(det.sets > 1 ? `${det.sets}×${det.reps}` : det.reps);
+        if (det.duration_seconds) {
+          const h = Math.floor(det.duration_seconds / 3600);
+          const m = Math.floor((det.duration_seconds % 3600) / 60);
+          const s = det.duration_seconds % 60;
+          parts.push([h ? `${h}h` : '', m ? `${m}m` : '', s ? `${s}s` : ''].filter(Boolean).join(' '));
+        } else if (det.reps) {
+          parts.push(det.sets > 1 ? `${det.sets}×${det.reps}` : det.reps);
+        }
         if (det.weight > 0) parts.push(`${det.weight}kg`);
         detStr = parts.join(' · ');
       }
@@ -2194,6 +2401,12 @@ function switchPickerTab(tab) {
   if (!isList) setTimeout(() => document.getElementById('customName').focus(), 100);
 }
 
+function applyCustomTemplate(name, cat) {
+  document.getElementById('customName').value = name;
+  document.getElementById('customCat').value = cat;
+  document.getElementById('customName').focus();
+}
+
 function logCustomActivity() {
   const name = document.getElementById('customName').value.trim();
   if (!name) { document.getElementById('customName').focus(); return; }
@@ -2201,8 +2414,8 @@ function logCustomActivity() {
   const ex = { name, category: cat, note: '' };
   closeManualLog();
   setTimeout(() => {
-    openWorkoutModal(ex, (detail) => {
-      addToLog(ex, 'manual', detail);
+    openWorkoutModal(ex, (detail, loggedAt) => {
+      addToLog(ex, 'manual', detail, loggedAt);
       notify(`✓ Logged — ${name}`);
     });
   }, 150);
@@ -2243,30 +2456,56 @@ function filterPicker(query) {
 function selectManualExercise(name) {
   const ex = EXERCISES.find(e => e.name === name);
   if (!ex) return;
+  const isInQueue = queue.slice(currentIdx).some(q => q.name === name);
   closeManualLog();
   setTimeout(() => {
-    openWorkoutModal(ex, (detail) => {
-      addToLog(ex, 'manual', detail); // addToLog calls saveState internally
-      removeFromQueue(ex.name);
+    openWorkoutModal(ex, (detail, loggedAt) => {
+      addToLog(ex, 'manual', detail, loggedAt);
+      if (isInQueue) {
+        _pendingQueueRemoveName = name;
+        showQueueRemovePrompt(name);
+      }
       notify(`✓ Logged — ${ex.name}`);
     });
   }, 150);
+}
+
+let _pendingQueueRemoveName = null;
+
+function showQueueRemovePrompt(name) {
+  document.getElementById('queueRemoveName').textContent = name;
+  document.getElementById('queueRemovePrompt').classList.add('open');
+}
+
+function removeFromQueueConfirm() {
+  if (_pendingQueueRemoveName) removeFromQueue(_pendingQueueRemoveName);
+  _pendingQueueRemoveName = null;
+  document.getElementById('queueRemovePrompt').classList.remove('open');
+}
+
+function keepInQueueConfirm() {
+  _pendingQueueRemoveName = null;
+  document.getElementById('queueRemovePrompt').classList.remove('open');
 }
 
 function editLogEntry(idx) {
   const entry = dailyLog[idx];
   if (!entry) return;
   const ex = { name: entry.name, category: entry.category, note: '' };
-  // Pre-fill modal with existing values
-  openWorkoutModal(ex, (detail) => {
+  openWorkoutModal(ex, (detail, loggedAt) => {
     if (!detail) return;
     entry.detail = detail;
-    // Update DB record if we have an id
+    if (loggedAt) {
+      entry.time = loggedAt.getHours().toString().padStart(2,'0') + ':' + loggedAt.getMinutes().toString().padStart(2,'0');
+      entry.loggedAt = loggedAt.toISOString();
+    }
     if (currentUser && entry.id) {
       sb.from('workout_log').update({
         reps: detail.reps || null,
         sets: detail.sets || null,
-        weight: detail.weight || null
+        weight: detail.weight || null,
+        duration_seconds: detail.duration_seconds || null,
+        ...(loggedAt ? { logged_at: entry.loggedAt } : {})
       }).eq('id', entry.id).eq('user_id', currentUser.id)
         .then(() => {}).catch(e => console.error('edit log error:', e));
     }
@@ -2320,9 +2559,13 @@ async function initApp() {
   updateDayProgress();
 
   updateRing(1, 1);
-  document.getElementById('ringProgress').style.stroke = '#3b82f6';
-  document.getElementById('ringProgress').style.strokeDasharray = CIRCUMFERENCE;
-  document.getElementById('ringProgress').style.strokeDashoffset = 0;
+  // Force blue stroke — bypass transition so it takes effect immediately
+  const rp = document.getElementById('ringProgress');
+  rp.style.transition = 'none';
+  rp.style.stroke = '#3b82f6';
+  rp.style.strokeDasharray = CIRCUMFERENCE;
+  rp.style.strokeDashoffset = 0;
+  requestAnimationFrame(() => { rp.style.transition = ''; });
   document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
 
   document.getElementById('modalSaveBtn').addEventListener('click', () => closeWorkoutModal(true));
