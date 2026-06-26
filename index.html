@@ -933,7 +933,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.28</div>
+    <div class="app-version">v0.31</div>
   </div>
   <button class="btn-signout" onclick="sb.auth.signOut()">Sign out</button>
 </header>
@@ -1589,6 +1589,7 @@ document.addEventListener('visibilitychange', () => {
 
 
 let dailyLog = [];
+let skippedToday = new Set(); // names skipped this session — persisted so reload doesn't re-queue them
 let viewingDay = null; // set after TODAY_KEY is defined
 
 // ── localStorage helpers ──
@@ -1599,7 +1600,8 @@ function saveState() {
     localStorage.setItem(TODAY_KEY, JSON.stringify({
       log: dailyLog,
       streak,
-      currentIdx
+      currentIdx,
+      skippedToday: [...skippedToday]
     }));
     const shuffleEl = document.getElementById('shuffleCheck');
     localStorage.setItem('wbw_settings', JSON.stringify({
@@ -1633,6 +1635,7 @@ function loadState() {
     dailyLog = data.log || [];
     streak = data.streak || 0;
     currentIdx = data.currentIdx || 0;
+    skippedToday = new Set(data.skippedToday || []);
     document.getElementById('statDone').textContent = streak;
   } catch(e) { console.error('loadState error:', e); }
 }
@@ -1800,6 +1803,7 @@ async function resetDay() {
 
   // Clear local state
   dailyLog = [];
+  skippedToday = new Set();
   streak = 0;
   currentIdx = 0;
   document.getElementById('statDone').textContent = 0;
@@ -1837,6 +1841,7 @@ async function clearLog() {
   }
 
   dailyLog = [];
+  skippedToday = new Set();
   streak = 0;
   document.getElementById('statDone').textContent = 0;
   saveState();
@@ -2077,6 +2082,9 @@ function skipExercise() {
   const ex = queue[currentIdx % queue.length];
   if (!ex) return;
   clearInterval(timerInterval);
+
+  // Track as skipped so it stays excluded from the front of the queue after reload
+  skippedToday.add(ex.name);
 
   // Move exercise to end of queue — don't log it
   queue.splice(currentIdx, 1);
@@ -2604,6 +2612,20 @@ function syncQueueWithLog() {
       queue.splice(i, 1);
     }
   }
+
+  // Move any skipped exercises to the end of the queue (after currentIdx items)
+  // so they don't appear as the next exercise after a reload
+  if (skippedToday.size > 0) {
+    const toMove = [];
+    for (let i = queue.length - 1; i >= currentIdx; i--) {
+      if (skippedToday.has(queue[i].name)) {
+        toMove.push(...queue.splice(i, 1));
+      }
+    }
+    // Re-append them at the end in their original relative order
+    toMove.reverse().forEach(ex => queue.push(ex));
+  }
+
   updateDayProgress();
   renderQueue();
   updateExerciseDisplay();
