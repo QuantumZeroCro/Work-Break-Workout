@@ -933,7 +933,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.29</div>
+    <div class="app-version">v0.28</div>
   </div>
   <button class="btn-signout" onclick="sb.auth.signOut()">Sign out</button>
 </header>
@@ -1376,11 +1376,74 @@ const DEFAULT_EXERCISES = [
   { name: "Bicep Curl",               category: "Pulling",    note: "Max reps, full range, slow eccentric" },
 ];
 
-// Load custom exercise list from localStorage (or fall back to defaults)
+// ── Exercise list migrations ──
+// Each entry describes a change to DEFAULT_EXERCISES that needs to be patched
+// into existing saved lists. Append new entries here whenever you change defaults.
+// Never edit or remove existing entries — only add new ones at the end.
+const EXERCISE_MIGRATIONS = [
+  {
+    version: 1,
+    description: 'Rename Nordic Curl → Reverse Nordic Curl',
+    apply(exercises) {
+      const ex = exercises.find(e => e.name === 'Nordic Curl');
+      if (ex) {
+        ex.name = 'Reverse Nordic Curl';
+        ex.note = 'Kneel, lean forward as slow as you can';
+      }
+      return exercises;
+    }
+  },
+  // Add future migrations here, e.g.:
+  // {
+  //   version: 2,
+  //   description: 'Add Archer Push Up to Pushing',
+  //   apply(exercises) {
+  //     if (!exercises.find(e => e.name === 'Archer Push Up')) {
+  //       exercises.push({ name: 'Archer Push Up', category: 'Pushing', note: 'Max reps each side' });
+  //     }
+  //     return exercises;
+  //   }
+  // },
+];
+
+function applyExerciseMigrations(exercises) {
+  let migrationVersion = 0;
+  try { migrationVersion = parseInt(localStorage.getItem('wbw_exercises_version') || '0'); } catch(e) {}
+
+  let changed = false;
+  for (const migration of EXERCISE_MIGRATIONS) {
+    if (migration.version > migrationVersion) {
+      try {
+        exercises = migration.apply(exercises);
+        migrationVersion = migration.version;
+        changed = true;
+      } catch(e) { console.error(`Migration v${migration.version} failed:`, e); }
+    }
+  }
+
+  if (changed) {
+    try {
+      localStorage.setItem('wbw_exercises', JSON.stringify(exercises));
+      localStorage.setItem('wbw_exercises_version', String(migrationVersion));
+    } catch(e) {}
+  }
+
+  return exercises;
+}
+
+// Load custom exercise list from localStorage (or fall back to defaults), then migrate
 let EXERCISES = (() => {
   try {
     const raw = localStorage.getItem('wbw_exercises');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      return applyExerciseMigrations(saved);
+    }
+  } catch(e) {}
+  // Fresh install — set version to latest so migrations don't re-run
+  try {
+    const latest = Math.max(0, ...EXERCISE_MIGRATIONS.map(m => m.version));
+    localStorage.setItem('wbw_exercises_version', String(latest));
   } catch(e) {}
   return [...DEFAULT_EXERCISES];
 })();
