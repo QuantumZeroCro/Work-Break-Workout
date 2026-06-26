@@ -187,6 +187,12 @@
   }
   .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
   .btn-primary:active { transform: translateY(0); }
+  .btn-primary.warn-restart {
+    background: var(--surface);
+    color: #f59e0b;
+    border: 1px solid #f59e0b;
+  }
+  .btn-primary.warn-restart:hover { background: rgba(245,158,11,0.1); transform: translateY(-1px); }
 
   .btn-ghost {
     background: var(--surface);
@@ -298,6 +304,48 @@
     min-width: 40px;
     text-align: right;
   }
+
+  /* ── Reset confirmation ── */
+  .reset-confirm {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    background: rgba(244,63,94,0.08);
+    border: 1px solid rgba(244,63,94,0.3);
+    border-radius: 10px;
+    margin-top: 4px;
+  }
+  .reset-confirm.open { display: flex; }
+  .reset-confirm-msg {
+    font-size: 12px;
+    color: #f43f5e;
+    line-height: 1.4;
+  }
+  .reset-confirm-btns { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-danger {
+    background: #f43f5e;
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 7px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .btn-danger:hover { background: #fb7185; }
+  .btn-cancel-small {
+    background: none;
+    border: 1px solid var(--surface2);
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .btn-cancel-small:hover { color: var(--text); border-color: var(--muted); }
 
   /* ── Log day tabs ── */
   .log-days {
@@ -502,6 +550,16 @@
     padding: 9px; border: none; border-radius: 8px; cursor: pointer;
   }
   .editor-add-btn:hover { background: var(--accent2); }
+  .editor-full-row { grid-column: 1 / -1; }
+
+  .editor-cat-header {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 10px 0 4px;
+    margin-top: 4px;
+  }
 
   /* ── Manual log picker ── */
   .picker-search {
@@ -533,6 +591,49 @@
   .picker-item:hover { border-color: var(--accent); }
   .picker-item.done-today { opacity: 0.45; }
   .picker-item.done-today::after { content: '✓'; color: var(--success); margin-left: auto; font-size: 11px; }
+  .picker-empty { color: var(--muted); font-size: 13px; padding: 8px 4px; }
+
+  /* ── Picker tabs ── */
+  .picker-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  .picker-tab {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--surface2);
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .picker-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .picker-tab:not(.active):hover { color: var(--text); border-color: var(--muted); }
+
+  /* ── Custom activity fields ── */
+  .picker-custom-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .picker-custom-fields select {
+    background: var(--surface2);
+    border: 1px solid #2a2d35;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+  }
+  .picker-custom-fields select:focus { border-color: var(--accent); }
+  .picker-custom-fields select option { background: var(--surface2); }
 
   /* ── Log again button on log entries ── */
   .log-again {
@@ -582,32 +683,180 @@
   .history-entry-detail { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; }
   .history-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px; }
   .history-list { max-height: 65vh; overflow-y: auto; }
+
+  /* ── Auth screen ── */
+  #authScreen {
+    display: none;
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 32px;
+  }
+  #authScreen h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .auth-card {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 20px;
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #authTitle {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  #authError {
+    font-size: 12px;
+    color: #f43f5e;
+    display: none;
+  }
+  .auth-input {
+    background: var(--surface2);
+    border: 1px solid #2a2d35;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    padding: 11px 13px;
+    outline: none;
+    width: 100%;
+  }
+  .auth-input:focus { border-color: var(--accent); }
+  #authSubmitBtn {
+    background: var(--accent);
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  #authSubmitBtn:hover { background: var(--accent2); }
+  #authToggleBtn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px;
+  }
+  #authToggleBtn:hover { color: var(--text); }
+
+  /* ── Header sign-out button ── */
+  .btn-signout {
+    background: none;
+    border: 1px solid var(--surface2);
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .btn-signout:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ── Version tag ── */
+  .app-version {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+
+  /* ── History modal sizing ── */
+  .modal-history {
+    max-width: 440px;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .btn-modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .btn-modal-close:hover { color: var(--text); }
+
+  /* ── Modal action buttons ── */
+  .btn-modal-skip { font-size: 13px; padding: 10px 18px; }
+  .btn-modal-save { font-size: 13px; padding: 10px 20px; }
+
+  /* ── Reset today label ── */
+  .label-danger { color: #f43f5e; }
+
+  /* ── Log item layout ── */
+  .log-item-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .log-item-left {
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* ── Inline tag badges (skip / manual) ── */
+  .tag-badge {
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .queue-item.done-state {
+    justify-content: center;
+    color: var(--success);
+  }
 </style>
 </head>
 <body>
 
 <!-- Auth screen -->
-<div id="authScreen" style="display:none;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px">
-  <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em">Work Break Workout</h1>
-  <div style="background:var(--surface);border:1px solid var(--surface2);border-radius:20px;padding:28px 24px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px">
-    <div id="authTitle" style="font-size:16px;font-weight:700;color:var(--text)">Sign in</div>
-    <div id="authError" style="font-size:12px;color:#f43f5e;display:none"></div>
-    <input id="authEmail" type="email" name="email" placeholder="Email" autocomplete="email" style="background:var(--surface2);border:1px solid #2a2d35;border-radius:8px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:15px;padding:11px 13px;outline:none;width:100%" />
-    <input id="authPassword" type="password" name="password" placeholder="Password" autocomplete="current-password" style="background:var(--surface2);border:1px solid #2a2d35;border-radius:8px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:15px;padding:11px 13px;outline:none;width:100%" />
-    <button id="authSubmitBtn" style="background:var(--accent);color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;padding:12px;border:none;border-radius:10px;cursor:pointer">Sign in</button>
-    <button id="authToggleBtn" style="background:none;border:none;color:var(--muted);font-family:'Space Grotesk',sans-serif;font-size:13px;cursor:pointer;padding:4px">No account? Sign up</button>
+<div id="authScreen">
+  <h1>Work Break Workout</h1>
+  <div class="auth-card">
+    <div id="authTitle">Sign in</div>
+    <div id="authError"></div>
+    <input id="authEmail" class="auth-input" type="email" name="email" placeholder="Email" autocomplete="email" />
+    <input id="authPassword" class="auth-input" type="password" name="password" placeholder="Password" autocomplete="current-password" />
+    <button id="authSubmitBtn">Sign in</button>
+    <button id="authToggleBtn">No account? Sign up</button>
   </div>
 </div>
 
 <!-- Main app -->
-<div id="mainApp" style="display:none;width:100%">
+<div id="mainApp" style="display:none">
 
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.1em;margin-top:2px">v0.27</div>
+    <div class="app-version">v0.28</div>
   </div>
-  <button onclick="sb.auth.signOut()" style="background:none;border:1px solid var(--surface2);color:var(--muted);font-family:'Space Grotesk',sans-serif;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer">Sign out</button>
+  <button class="btn-signout" onclick="sb.auth.signOut()">Sign out</button>
 </header>
 
 <!-- Ring timer -->
@@ -650,7 +899,7 @@
   <button class="btn-ghost" onclick="toggleSettings()">⚙ Settings</button>
   <button class="btn-ghost" onclick="toggleEditor()">✎ Exercises</button>
   <button class="btn-ghost" onclick="openHistory()">📅 History</button>
-  <button class="btn-ghost" onclick="openManualLog()">＋ Log</button>
+  <button class="btn-ghost" onclick="openManualLog()">+ Log</button>
 </div>
 
 <!-- Settings -->
@@ -666,8 +915,15 @@
     <input type="checkbox" id="shuffleCheck" checked onchange="rebuildQueue();saveState()">
   </div>
   <div class="setting-row">
-    <label style="color:#f43f5e">Reset today</label>
-    <button onclick="resetDay()" style="background:#f43f5e;color:#fff;font-size:12px;padding:7px 14px;border:none;border-radius:8px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600">Reset</button>
+    <label class="label-danger">Reset today</label>
+    <button id="btnResetTrigger" class="btn-danger" onclick="showResetConfirm()">Reset</button>
+  </div>
+  <div class="reset-confirm" id="resetConfirm">
+    <div class="reset-confirm-msg">This will delete all of today's logs and restart the queue. This cannot be undone.</div>
+    <div class="reset-confirm-btns">
+      <button class="btn-cancel-small" onclick="hideResetConfirm()">Cancel</button>
+      <button class="btn-danger" onclick="confirmReset()">Yes, reset today</button>
+    </div>
   </div>
 </div>
 
@@ -681,7 +937,14 @@
 <div class="log-section">
   <div class="log-header">
     <span class="log-title">Log</span>
-    <button class="log-clear" onclick="clearLog()">clear</button>
+    <button class="log-clear" id="btnClearLog" onclick="showClearLogConfirm()">clear</button>
+  </div>
+  <div class="reset-confirm" id="clearLogConfirm">
+    <div class="reset-confirm-msg">Clear all of today's logs?</div>
+    <div class="reset-confirm-btns">
+      <button class="btn-cancel-small" onclick="hideClearLogConfirm()">Cancel</button>
+      <button class="btn-danger" onclick="confirmClearLog()">Yes, clear</button>
+    </div>
   </div>
   <div class="log-days" id="logDays"></div>
   <div class="log-list" id="logList"><div class="log-empty">No exercises yet today</div></div>
@@ -701,7 +964,7 @@
       <option>Pulling</option><option>Legs</option><option>Back</option>
       <option>Mobility</option><option>Grip</option><option>Skill</option>
     </select>
-    <input id="newExNote" placeholder="Note (optional)" style="grid-column:1/-1"/>
+    <input id="newExNote" class="editor-full-row" placeholder="Note (optional)" />
     <button class="editor-add-btn" onclick="addExercise()">+ Add exercise</button>
   </div>
 </div>
@@ -710,10 +973,10 @@
 
 <!-- History modal -->
 <div class="modal-backdrop" id="historyModal" onclick="if(event.target===this)closeHistory()">
-  <div class="modal" style="max-width:440px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column">
-    <div style="display:flex;align-items:center;justify-content:space-between">
+  <div class="modal modal-history">
+    <div class="modal-header">
       <h3>History</h3>
-      <button onclick="closeHistory()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px">×</button>
+      <button class="btn-modal-close" onclick="closeHistory()">×</button>
     </div>
     <div class="history-list" id="historyList"></div>
   </div>
@@ -739,8 +1002,8 @@
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn-ghost" id="modalSkipBtn" style="font-size:13px;padding:10px 18px">Skip logging</button>
-      <button class="btn-done" id="modalSaveBtn" style="font-size:13px;padding:10px 20px">Save</button>
+      <button class="btn-ghost btn-modal-skip" id="modalSkipBtn">Skip logging</button>
+      <button class="btn-done btn-modal-save" id="modalSaveBtn">Save</button>
     </div>
   </div>
 </div>
@@ -748,9 +1011,29 @@
 <!-- Manual log picker modal -->
 <div class="modal-backdrop" id="manualLogModal" onclick="if(event.target===this)closeManualLog()">
   <div class="modal">
-    <h3>Log exercise</h3>
-    <input class="picker-search" id="pickerSearch" placeholder="Search exercises…" oninput="filterPicker(this.value)" />
-    <div class="picker-list" id="pickerList"></div>
+    <div class="picker-tabs">
+      <button class="picker-tab active" id="tabFromList" onclick="switchPickerTab('list')">From list</button>
+      <button class="picker-tab" id="tabCustom" onclick="switchPickerTab('custom')">Custom activity</button>
+    </div>
+
+    <!-- From list -->
+    <div id="pickerPanelList">
+      <input class="picker-search" id="pickerSearch" placeholder="Search exercises…" oninput="filterPicker(this.value)" />
+      <div class="picker-list" id="pickerList"></div>
+    </div>
+
+    <!-- Custom activity -->
+    <div id="pickerPanelCustom" style="display:none">
+      <div class="picker-custom-fields">
+        <input class="picker-search" id="customName" placeholder="Activity name…" />
+        <select id="customCat">
+          <option>Cardio</option><option>Core</option><option>Pushing</option>
+          <option>Pulling</option><option>Legs</option><option>Back</option>
+          <option>Mobility</option><option>Grip</option><option>Skill</option>
+        </select>
+      </div>
+      <button class="editor-add-btn" onclick="logCustomActivity()">Log activity</button>
+    </div>
   </div>
 </div>
 
@@ -828,7 +1111,6 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
         errEl.style.display = 'block';
       }
     }
-    console.log('auth result:', result);
     if (result.error) {
       errEl.style.color = '#f43f5e';
       errEl.textContent = result.error.message;
@@ -849,7 +1131,7 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
 async function syncLogToDB(entry) {
   if (!currentUser) return;
   try {
-    await sb.from('workout_log').insert({
+    const { data } = await sb.from('workout_log').insert({
       user_id: currentUser.id,
       exercise_name: entry.name,
       category: entry.category,
@@ -858,7 +1140,9 @@ async function syncLogToDB(entry) {
       sets: entry.detail?.sets || null,
       weight: entry.detail?.weight || null,
       logged_at: new Date().toISOString()
-    });
+    }).select('id').single();
+    // Store the DB id back into the entry so deleteLogEntry can use it
+    if (data?.id) entry.id = data.id;
   } catch(e) { console.error('DB sync error:', e); }
 }
 
@@ -873,6 +1157,7 @@ async function loadLogsFromDB() {
       .order('logged_at', { ascending: false });
     if (error || !data || data.length === 0) return null;
     dailyLog = data.map(r => ({
+      id: r.id,
       name: r.exercise_name,
       category: r.category,
       time: new Date(r.logged_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
@@ -1161,8 +1446,6 @@ function loadState() {
     streak = data.streak || 0;
     currentIdx = data.currentIdx || 0;
     document.getElementById('statDone').textContent = streak;
-    // Debug
-    console.log('loadState:', { log: dailyLog.length, streak, currentIdx });
   } catch(e) { console.error('loadState error:', e); }
 }
 
@@ -1171,6 +1454,10 @@ function addToLog(ex, how, detail) {
   const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
   const entry = { name: ex.name, category: ex.category, time, how, detail: detail || null };
   dailyLog.unshift(entry);
+  if (how !== 'skip') {
+    streak++;
+    document.getElementById('statDone').textContent = streak;
+  }
   saveState();
   syncLogToDB(entry);
   renderLog();
@@ -1221,9 +1508,29 @@ function switchDay(key) {
   renderLogForKey(key);
 }
 
+function showClearLogConfirm() {
+  document.getElementById('clearLogConfirm').classList.add('open');
+  document.getElementById('btnClearLog').style.display = 'none';
+}
+
+function hideClearLogConfirm() {
+  document.getElementById('clearLogConfirm').classList.remove('open');
+  document.getElementById('btnClearLog').style.display = '';
+}
+
+async function confirmClearLog() {
+  hideClearLogConfirm();
+  await clearLog();
+}
+
 function renderLog() {
   renderLogDays();
   renderLogForKey(viewingDay || TODAY_KEY);
+  // Show clear button only when viewing today
+  const isToday = viewingDay === TODAY_KEY || !viewingDay;
+  const clearBtn = document.getElementById('btnClearLog');
+  if (clearBtn) clearBtn.style.display = isToday ? '' : 'none';
+  if (!isToday) hideClearLogConfirm();
 }
 
 function renderLogForKey(key) {
@@ -1238,7 +1545,7 @@ function renderLogForKey(key) {
     return;
   }
   const isToday = key === TODAY_KEY;
-  list.innerHTML = log.map(entry => {
+  list.innerHTML = log.map((entry, idx) => {
     const color = CATEGORY_COLORS[entry.category] || '#60a5fa';
     const skipped = entry.how === 'skip';
     const isManual = entry.how === 'manual';
@@ -1251,18 +1558,18 @@ function renderLogForKey(key) {
       if (d.weight > 0) parts.push(`${d.weight}kg`);
       if (parts.length) detailHtml += `<span class="log-detail">${parts.join(' · ')}</span>`;
     }
-    const skipTag = skipped ? '<span style="color:var(--muted);font-size:10px;margin-left:6px">skipped</span>' : '';
-    const manualTag = isManual ? '<span style="color:var(--muted);font-size:10px;margin-left:4px">manual</span>' : '';
-    const againBtn = isToday && !skipped ? `<button class="log-again" data-exname="${entry.name.replace(/"/g,'&quot;')}" onclick="logAgain(this.dataset.exname)">+ set</button>` : '';
-    const delBtn = isToday ? `<button class="log-del" onclick="deleteLogEntry(${log.indexOf(entry)})" title="Delete">×</button>` : '';
+    const skipTag = skipped ? '<span class="tag-badge">skipped</span>' : '';
+    const manualTag = isManual ? '<span class="tag-badge">manual</span>' : '';
+    const editBtn = isToday && !skipped ? `<button class="log-again" data-idx="${idx}" onclick="editLogEntry(${idx})">edit</button>` : '';
+    const delBtn = isToday ? `<button class="log-del" onclick="deleteLogEntry(${idx})" title="Delete">×</button>` : '';
 
     return `<div class="log-item">
-      <div class="log-item-left" style="flex:1;flex-wrap:wrap;gap:4px">
+      <div class="log-item-left">
         <div class="log-dot" style="background:${color}"></div>
         <span class="log-name">${entry.name}</span>
-        ${skipTag}${manualTag}${detailHtml}${againBtn}
+        ${skipTag}${manualTag}${detailHtml}${editBtn}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      <div class="log-item-right">
         <span class="log-time">${entry.time}</span>
         ${delBtn}
       </div>
@@ -1270,9 +1577,22 @@ function renderLogForKey(key) {
   }).join('');
 }
 
-async function resetDay() {
-  if (!confirm('Reset today? This will clear all logs for today and restore the full exercise queue.')) return;
+function showResetConfirm() {
+  document.getElementById('resetConfirm').classList.add('open');
+  document.getElementById('btnResetTrigger').style.display = 'none';
+}
 
+function hideResetConfirm() {
+  document.getElementById('resetConfirm').classList.remove('open');
+  document.getElementById('btnResetTrigger').style.display = '';
+}
+
+async function confirmReset() {
+  hideResetConfirm();
+  await resetDay();
+}
+
+async function resetDay() {
   // Delete today's logs from Supabase
   if (currentUser) {
     try {
@@ -1293,8 +1613,10 @@ async function resetDay() {
 
   clearInterval(timerInterval);
   sessionActive = false;
-  document.getElementById('btnStart').disabled = false;
-  document.getElementById('btnStart').textContent = 'Start Session';
+  const btnStart = document.getElementById('btnStart');
+  btnStart.disabled = false;
+  btnStart.textContent = 'Start Session';
+  btnStart.classList.remove('warn-restart');
   document.getElementById('btnDone').disabled = true;
   document.getElementById('btnSkip').disabled = true;
 
@@ -1308,8 +1630,18 @@ async function resetDay() {
   notify('Day reset ✓');
 }
 
-function clearLog() {
-  if (viewingDay !== TODAY_KEY) return;
+async function clearLog() {
+  // Delete today's logs from Supabase
+  if (currentUser) {
+    try {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      await sb.from('workout_log')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .gte('logged_at', today.toISOString());
+    } catch(e) { console.error('clearLog DB error:', e); }
+  }
+
   dailyLog = [];
   streak = 0;
   document.getElementById('statDone').textContent = 0;
@@ -1321,23 +1653,32 @@ function clearLog() {
 async function deleteLogEntry(idx) {
   const entry = dailyLog[idx];
   if (!entry) return;
-  // Remove from DB by matching user_id + exercise_name + time
+
   if (currentUser) {
     try {
-      const loggedAt = new Date();
-      const [h, m] = entry.time.split(':');
-      loggedAt.setHours(parseInt(h), parseInt(m), 0, 0);
-      // Delete the most recent matching row (same name, same minute)
-      const from = new Date(loggedAt.getTime() - 60000).toISOString();
-      const to = new Date(loggedAt.getTime() + 60000).toISOString();
-      await sb.from('workout_log')
-        .delete()
-        .eq('user_id', currentUser.id)
-        .eq('exercise_name', entry.name)
-        .gte('logged_at', from)
-        .lte('logged_at', to);
+      if (entry.id) {
+        // Precise deletion by primary key
+        await sb.from('workout_log')
+          .delete()
+          .eq('id', entry.id)
+          .eq('user_id', currentUser.id);
+      } else {
+        // Fallback: match by name + time window (±1 min) for entries without a stored id
+        const loggedAt = new Date();
+        const [h, m] = entry.time.split(':');
+        loggedAt.setHours(parseInt(h), parseInt(m), 0, 0);
+        const from = new Date(loggedAt.getTime() - 60000).toISOString();
+        const to   = new Date(loggedAt.getTime() + 60000).toISOString();
+        await sb.from('workout_log')
+          .delete()
+          .eq('user_id', currentUser.id)
+          .eq('exercise_name', entry.name)
+          .gte('logged_at', from)
+          .lte('logged_at', to);
+      }
     } catch(e) { console.error('delete error:', e); }
   }
+
   dailyLog.splice(idx, 1);
   streak = dailyLog.filter(e => e.how !== 'skip').length;
   document.getElementById('statDone').textContent = streak;
@@ -1346,32 +1687,25 @@ async function deleteLogEntry(idx) {
 }
 
 function doneExercise() {
-  console.log('doneExercise called, currentIdx:', currentIdx, 'queue.length:', queue.length);
   clearInterval(timerInterval);
   const ex = queue[currentIdx % queue.length];
-  console.log('ex:', ex);
-  if (!ex) { console.error('no exercise found!'); return; }
+  if (!ex) return;
   document.getElementById('btnDone').disabled = true;
 
   openWorkoutModal(ex, (detail) => {
     notify(`✓ Done — ${ex.name}`);
-    addToLog(ex, 'done', detail);
-    streak++;
-    document.getElementById('statDone').textContent = streak;
-    saveState();
+    addToLog(ex, 'done', detail); // addToLog calls saveState internally
 
-    (() => {
-      currentIdx++;
-      saveState();
-      updateDayProgress();
-      if (currentIdx >= queue.length) {
-        showAllDone();
-        return;
-      }
-      updateExerciseDisplay();
-      renderQueue();
-      startCountdown();
-    })();
+    currentIdx++;
+    saveState();
+    updateDayProgress();
+    if (currentIdx >= queue.length) {
+      showAllDone();
+      return;
+    }
+    updateExerciseDisplay();
+    renderQueue();
+    startCountdown();
   });
 }
 
@@ -1382,20 +1716,22 @@ function startCountdown() {
   document.getElementById('ringLabel').textContent = 'next exercise in';
   document.getElementById('ringSubLabel').textContent = 'keep working!';
   document.getElementById('ringTime').classList.remove('go');
+  document.getElementById('ringTime').textContent = formatTime(totalSeconds);
   document.getElementById('exerciseCard').classList.remove('active');
   document.getElementById('btnDone').disabled = false;
   document.getElementById('btnSkip').disabled = false;
   clearInterval(timerInterval);
   timerInterval = setInterval(tick, 1000);
-  updateRing(totalSeconds, totalSeconds);
-  document.getElementById('ringTime').textContent = formatTime(totalSeconds);
+  updateRing(totalSeconds, totalSeconds); // resets colour back to blue
 }
 
 function showAllDone() {
   clearInterval(timerInterval);
   sessionActive = false;
-  document.getElementById('btnStart').disabled = false;
-  document.getElementById('btnStart').textContent = 'Start Session';
+  const btnStart = document.getElementById('btnStart');
+  btnStart.disabled = false;
+  btnStart.textContent = 'Restart day?';
+  btnStart.classList.add('warn-restart');
   document.getElementById('btnDone').disabled = true;
   document.getElementById('btnSkip').disabled = true;
   document.getElementById('ringLabel').textContent = 'all done!';
@@ -1405,14 +1741,16 @@ function showAllDone() {
   document.getElementById('exName').textContent = 'All exercises done!';
   document.getElementById('exNote').textContent = "You've completed every exercise for today. See you tomorrow.";
   document.getElementById('exCategory').textContent = 'Complete';
-  document.getElementById('queueList').innerHTML = '<div class="queue-item" style="justify-content:center;color:var(--success)">Nothing left for today ✓</div>';
+  document.getElementById('queueList').innerHTML = '<div class="queue-item done-state">Nothing left for today ✓</div>';
 }
 
 function startSession() {
+  const btnStart = document.getElementById('btnStart');
+  btnStart.classList.remove('warn-restart');
+  btnStart.disabled = true;
+  btnStart.textContent = 'Session active';
   sessionActive = true;
-  document.getElementById('btnStart').disabled = true;
-  document.getElementById('btnStart').textContent = 'Session active';
-  if (queue.length === 0) rebuildQueue();
+  if (queue.length === 0 || currentIdx >= queue.length) rebuildQueue();
   updateExerciseDisplay();
   renderQueue();
   triggerExercise();
@@ -1433,6 +1771,7 @@ function subscribeRealtime() {
       // Another device logged an exercise — sync state
       const r = payload.new;
       const entry = {
+        id: r.id,
         name: r.exercise_name,
         category: r.category,
         time: new Date(r.logged_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
@@ -1446,21 +1785,24 @@ function subscribeRealtime() {
         streak = dailyLog.filter(e => e.how !== 'skip').length;
         document.getElementById('statDone').textContent = streak;
         saveState();
+
+        // Check whether this is the currently queued exercise BEFORE removing it
+        const currentEx = queue[currentIdx % queue.length];
+        const wasCurrentExercise = currentEx && currentEx.name === entry.name;
+
         removeFromQueue(entry.name);
         renderLog();
         notify(`Synced: ${entry.name}`);
-        // If we're currently waiting on this exercise, advance
-        const currentEx = queue[currentIdx % queue.length];
-        if (currentEx && currentEx.name === entry.name) {
-          (() => {
-            currentIdx++;
-            saveState();
-            updateDayProgress();
-            if (currentIdx >= queue.length) { showAllDone(); return; }
-            updateExerciseDisplay();
-            renderQueue();
-            startCountdown();
-          });
+
+        // If the synced entry was the exercise we were waiting on, advance
+        if (wasCurrentExercise) {
+          // removeFromQueue already spliced it out, so currentIdx now points to the next one
+          saveState();
+          updateDayProgress();
+          if (currentIdx >= queue.length) { showAllDone(); return; }
+          updateExerciseDisplay();
+          renderQueue();
+          startCountdown();
         }
       }
     })
@@ -1492,7 +1834,13 @@ function scheduleMidnightReset() {
     renderQueue();
     renderLog();
     updateDayProgress();
-    startCountdown();
+    // Only resume countdown if a session was already running
+    if (sessionActive) {
+      startCountdown();
+    } else {
+      document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
+      updateRing(1, 1);
+    }
     scheduleMidnightReset(); // schedule next day
   }, msUntilMidnight);
 }
@@ -1508,7 +1856,6 @@ function triggerExercise() {
   if (!ex) { exerciseTriggered = false; return; }
 
   notify(`⚡ ${ex.name}`);
-  playBeep();
 
   document.getElementById('ringLabel').textContent = 'exercise time!';
   document.getElementById('ringTime').textContent = 'GO!';
@@ -1525,12 +1872,14 @@ function skipExercise() {
   if (!ex) return;
   clearInterval(timerInterval);
 
-  // Move exercise to end of queue instead of removing it
+  // Move exercise to end of queue before logging so the queue state is consistent
   queue.splice(currentIdx, 1);
   queue.push(ex);
 
+  // Log the skip (also calls saveState internally)
+  addToLog(ex, 'skip', null);
+
   notify('Skipped → moved to end');
-  saveState();
   updateDayProgress();
 
   if (currentIdx >= queue.length) {
@@ -1587,33 +1936,17 @@ function notify(msg) {
   setTimeout(() => el.classList.remove('show'), 2500);
 }
 
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.15, 0.3].forEach((t, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.value = i < 2 ? 880 : 1320;
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + t);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.12);
-      osc.start(ctx.currentTime + t);
-      osc.stop(ctx.currentTime + t + 0.13);
-    });
-  } catch(e) {}
-}
-
 // ── Workout input modal ──
 let _pendingModalCallback = null;
 let _pendingModalEx = null;
 
-function openWorkoutModal(ex, callback) {
+function openWorkoutModal(ex, callback, prefill) {
   _pendingModalEx = ex;
   _pendingModalCallback = callback;
   document.getElementById('modalExName').textContent = ex.name;
-  document.getElementById('modalReps').value = '';
-  document.getElementById('modalSets').value = '1';
-  document.getElementById('modalWeight').value = '';
+  document.getElementById('modalReps').value = prefill?.reps || '';
+  document.getElementById('modalSets').value = prefill?.sets || '1';
+  document.getElementById('modalWeight').value = prefill?.weight || '';
   document.getElementById('workoutModal').classList.add('open');
   setTimeout(() => document.getElementById('modalReps').focus(), 100);
 }
@@ -1644,13 +1977,25 @@ function toggleEditor() {
 
 function renderEditorList() {
   const list = document.getElementById('editorList');
-  list.innerHTML = EXERCISES.map((ex, i) => {
+  // Sort by BUCKET_ORDER category, then alphabetically within each
+  const sorted = [...EXERCISES].map((ex, origIdx) => ({ ex, origIdx }))
+    .sort((a, b) => {
+      const ci = BUCKET_ORDER.indexOf(a.ex.category) - BUCKET_ORDER.indexOf(b.ex.category);
+      return ci !== 0 ? ci : a.ex.name.localeCompare(b.ex.name);
+    });
+
+  let lastCat = null;
+  list.innerHTML = sorted.map(({ ex, origIdx }) => {
     const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
-    return `<div class="editor-item">
-      <span class="editor-item-cat" style="background:${color}">${ex.category}</span>
+    let header = '';
+    if (ex.category !== lastCat) {
+      lastCat = ex.category;
+      header = `<div class="editor-cat-header" style="color:${color}">${ex.category}</div>`;
+    }
+    return `${header}<div class="editor-item">
       <span class="editor-item-name">${ex.name}</span>
       <span class="editor-item-note">${ex.note}</span>
-      <button class="editor-btn-del" onclick="deleteExercise(${i})" title="Remove">✕</button>
+      <button class="editor-btn-del" onclick="deleteExercise(${origIdx})" title="Remove">✕</button>
     </div>`;
   }).join('');
 }
@@ -1728,7 +2073,7 @@ async function renderHistory() {
     return;
   }
 
-  // Group by date
+  // Group by date — skip days with no entries
   const byDay = {};
   allEntries.forEach(e => {
     const d = e.date;
@@ -1736,6 +2081,9 @@ async function renderHistory() {
     if (!byDay[key]) byDay[key] = [];
     byDay[key].push(e);
   });
+
+  // Remove days that ended up empty
+  Object.keys(byDay).forEach(k => { if (byDay[k].length === 0) delete byDay[k]; });
 
   const days = Object.keys(byDay).sort().reverse();
   list.innerHTML = days.map((dayKey, di) => {
@@ -1764,11 +2112,11 @@ async function renderHistory() {
         if (det.weight > 0) parts.push(`${det.weight}kg`);
         detStr = parts.join(' · ');
       }
-      const skipTag = e.how === 'skip' ? '<span style="color:var(--muted);font-size:10px;margin-left:4px">skipped</span>' : '';
+      const skipTag = e.how === 'skip' ? '<span class="tag-badge">skipped</span>' : '';
       const entryIdx = entries.indexOf(e);
       const delBtn = `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" onclick="deleteHistoryEntry(this)" title="Delete">×</button>`;
       return `<div class="history-entry">
-        <div class="log-dot" style="background:${color};flex-shrink:0"></div>
+        <div class="log-dot history-dot" style="background:${color}"></div>
         <span class="history-entry-name">${e.name}${skipTag}</span>
         ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
         ${delBtn}
@@ -1823,13 +2171,41 @@ async function deleteHistoryEntry(btn) {
     } catch(e) {}
   }
 
-  btn.closest('.history-entry').remove();
+  const entryEl = btn.closest('.history-entry');
+  const dayEl = btn.closest('.history-day');
+  entryEl.remove();
+  // If that was the last entry for the day, remove the whole day card
+  if (dayEl && dayEl.querySelectorAll('.history-entry').length === 0) dayEl.remove();
 }
 function openManualLog() {
+  switchPickerTab('list');
   document.getElementById('pickerSearch').value = '';
   filterPicker('');
   document.getElementById('manualLogModal').classList.add('open');
   setTimeout(() => document.getElementById('pickerSearch').focus(), 100);
+}
+
+function switchPickerTab(tab) {
+  const isList = tab === 'list';
+  document.getElementById('pickerPanelList').style.display = isList ? '' : 'none';
+  document.getElementById('pickerPanelCustom').style.display = isList ? 'none' : '';
+  document.getElementById('tabFromList').classList.toggle('active', isList);
+  document.getElementById('tabCustom').classList.toggle('active', !isList);
+  if (!isList) setTimeout(() => document.getElementById('customName').focus(), 100);
+}
+
+function logCustomActivity() {
+  const name = document.getElementById('customName').value.trim();
+  if (!name) { document.getElementById('customName').focus(); return; }
+  const cat = document.getElementById('customCat').value;
+  const ex = { name, category: cat, note: '' };
+  closeManualLog();
+  setTimeout(() => {
+    openWorkoutModal(ex, (detail) => {
+      addToLog(ex, 'manual', detail);
+      notify(`✓ Logged — ${name}`);
+    });
+  }, 150);
 }
 
 function closeManualLog() {
@@ -1845,7 +2221,7 @@ function filterPicker(query) {
   const matches = EXERCISES.filter(e => !q || e.name.toLowerCase().includes(q));
   const list = document.getElementById('pickerList');
   if (matches.length === 0) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 4px">No matches</div>';
+    list.innerHTML = '<div class="picker-empty">No matches</div>';
     return;
   }
   list.innerHTML = matches.map(ex => {
@@ -1853,7 +2229,7 @@ function filterPicker(query) {
     const done = doneTodayNames.has(ex.name);
     const safeName = ex.name.replace(/"/g, '&quot;');
     return `<div class="picker-item${done ? ' done-today' : ''}" data-exname="${safeName}">
-      <span class="editor-item-cat" style="background:${color};font-size:10px;padding:2px 6px;border-radius:20px;font-weight:600;color:#fff;white-space:nowrap">${ex.category}</span>
+      <span class="editor-item-cat" style="background:${color}">${ex.category}</span>
       <span>${ex.name}</span>
     </div>`;
   }).join('');
@@ -1870,28 +2246,34 @@ function selectManualExercise(name) {
   closeManualLog();
   setTimeout(() => {
     openWorkoutModal(ex, (detail) => {
-      console.log('modal callback fired, detail:', detail);
-      addToLog(ex, 'manual', detail);
-      console.log('after addToLog, dailyLog length:', dailyLog.length);
+      addToLog(ex, 'manual', detail); // addToLog calls saveState internally
       removeFromQueue(ex.name);
-      streak++;
-      document.getElementById('statDone').textContent = streak;
-      saveState();
-      console.log('after saveState, checking localStorage:', localStorage.getItem(TODAY_KEY));
       notify(`✓ Logged — ${ex.name}`);
     });
   }, 150);
 }
 
-function logAgain(name) {
-  const ex = EXERCISES.find(e => e.name === name);
-  if (!ex) return;
+function editLogEntry(idx) {
+  const entry = dailyLog[idx];
+  if (!entry) return;
+  const ex = { name: entry.name, category: entry.category, note: '' };
+  // Pre-fill modal with existing values
   openWorkoutModal(ex, (detail) => {
     if (!detail) return;
-    addToLog(ex, 'manual', detail);
+    entry.detail = detail;
+    // Update DB record if we have an id
+    if (currentUser && entry.id) {
+      sb.from('workout_log').update({
+        reps: detail.reps || null,
+        sets: detail.sets || null,
+        weight: detail.weight || null
+      }).eq('id', entry.id).eq('user_id', currentUser.id)
+        .then(() => {}).catch(e => console.error('edit log error:', e));
+    }
     saveState();
-    notify(`✓ Logged again — ${ex.name}`);
-  });
+    renderLog();
+    notify(`✓ Updated — ${entry.name}`);
+  }, entry.detail);
 }
 
 function removeFromQueue(name) {
@@ -1945,6 +2327,11 @@ async function initApp() {
 
   document.getElementById('modalSaveBtn').addEventListener('click', () => closeWorkoutModal(true));
   document.getElementById('modalSkipBtn').addEventListener('click', () => closeWorkoutModal(false));
+
+  // Enter key submits the workout modal
+  document.getElementById('workoutModal').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); closeWorkoutModal(true); }
+  });
 
   subscribeRealtime();
 
