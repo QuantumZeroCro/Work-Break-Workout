@@ -161,6 +161,14 @@
     font-size: 13px;
     color: var(--muted);
   }
+  .ex-record {
+    margin-top: 10px;
+    min-height: 20px;
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
 
   /* ── Controls ── */
   .controls {
@@ -704,6 +712,36 @@
   .history-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px; }
   .history-list { max-height: 65vh; overflow-y: auto; }
 
+  /* ── Records modal ── */
+  .records-cat-header {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 14px 0 6px;
+    margin-top: 2px;
+  }
+  .records-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--surface2);
+  }
+  .records-row:last-child { border-bottom: none; }
+  .records-name { flex: 1; font-size: 13px; color: var(--text); }
+  .records-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .record-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .record-badge-reps { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .record-badge-dur  { background: rgba(16,185,129,0.15); color: #34d399; }
+  .record-badge-wt   { background: rgba(245,158,11,0.15);  color: #fbbf24; }
+
   /* ── Auth screen ── */
   #authScreen {
     display: none;
@@ -952,9 +990,9 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.33</div>
+    <div class="app-version">v0.34</div>
   </div>
-  <button class="btn-signout" onclick="sb.auth.signOut()">Sign out</button>
+  <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
 
 <!-- Ring timer -->
@@ -987,17 +1025,19 @@
   <div class="ex-category" id="exCategory">Strength</div>
   <div class="ex-name" id="exName">Ready?</div>
   <div class="ex-note" id="exNote">Hit Start to begin your session</div>
+  <div class="ex-record" id="exRecord"></div>
 </div>
 
 <!-- Controls -->
 <div class="controls">
-  <button class="btn-primary" id="btnStart" onclick="startSession()">Start Session</button>
-  <button class="btn-done" id="btnDone" onclick="doneExercise()">✓ Done</button>
-  <button class="btn-ghost" id="btnSkip" onclick="skipExercise()">Skip →</button>
-  <button class="btn-ghost" onclick="toggleSettings()">⚙ Settings</button>
-  <button class="btn-ghost" onclick="toggleEditor()">✎ Exercises</button>
-  <button class="btn-ghost" onclick="openHistory()">📅 History</button>
-  <button class="btn-ghost" onclick="openManualLog()">+ Log</button>
+  <button class="btn-primary" id="btnStart" aria-live="polite">Start Session</button>
+  <button class="btn-done" id="btnDone" aria-label="Mark exercise as done" >✓ Done</button>
+  <button class="btn-ghost" id="btnSkip" aria-label="Skip this exercise" >Skip →</button>
+  <button class="btn-ghost" aria-label="Toggle settings" >⚙ Settings</button>
+  <button class="btn-ghost" aria-label="Edit exercise list" >✎ Exercises</button>
+  <button class="btn-ghost" aria-label="View workout history" >📅 History</button>
+  <button class="btn-ghost" aria-label="View personal records" data-action="openRecords">🏆 Records</button>
+  <button class="btn-ghost" aria-label="Manually log an activity" >+ Log</button>
 </div>
 
 <!-- Settings -->
@@ -1014,13 +1054,13 @@
   </div>
   <div class="setting-row">
     <label class="label-danger">Reset today</label>
-    <button id="btnResetTrigger" class="btn-danger" onclick="showResetConfirm()">Reset</button>
+    <button id="btnResetTrigger" class="btn-danger" >Reset</button>
   </div>
   <div class="reset-confirm" id="resetConfirm">
     <div class="reset-confirm-msg">This will delete all of today's logs and restart the queue. This cannot be undone.</div>
     <div class="reset-confirm-btns">
-      <button class="btn-cancel-small" onclick="hideResetConfirm()">Cancel</button>
-      <button class="btn-danger" onclick="confirmReset()">Yes, reset today</button>
+      <button class="btn-cancel-small" data-action="hideReset">Cancel</button>
+      <button class="btn-danger" data-action="confirmReset">Yes, reset today</button>
     </div>
   </div>
 </div>
@@ -1035,13 +1075,13 @@
 <div class="log-section">
   <div class="log-header">
     <span class="log-title">Log</span>
-    <button class="log-clear" id="btnClearLog" onclick="showClearLogConfirm()">clear</button>
+    <button class="log-clear" id="btnClearLog" >clear</button>
   </div>
   <div class="reset-confirm" id="clearLogConfirm">
     <div class="reset-confirm-msg">Clear all of today's logs?</div>
     <div class="reset-confirm-btns">
-      <button class="btn-cancel-small" onclick="hideClearLogConfirm()">Cancel</button>
-      <button class="btn-danger" onclick="confirmClearLog()">Yes, clear</button>
+      <button class="btn-cancel-small" data-action="hideClear">Cancel</button>
+      <button class="btn-danger" data-action="confirmClear">Yes, clear</button>
     </div>
   </div>
   <div class="log-days" id="logDays"></div>
@@ -1052,7 +1092,7 @@
 <div class="editor-section" id="editorSection" style="display:none">
   <div class="editor-header">
     <span class="editor-title">Exercise list</span>
-    <button class="log-clear" onclick="toggleEditor()">done</button>
+    <button class="log-clear" data-action="editorDone">done</button>
   </div>
   <div class="editor-list" id="editorList"></div>
   <div class="editor-add-row">
@@ -1063,34 +1103,47 @@
       <option>Mobility</option><option>Grip</option><option>Skill</option>
     </select>
     <input id="newExNote" class="editor-full-row" placeholder="Note (optional)" />
-    <button class="editor-add-btn" onclick="addExercise()">+ Add exercise</button>
+    <button class="editor-add-btn" data-action="addExercise">+ Add exercise</button>
   </div>
 </div>
 
 </div><!-- end mainApp -->
 
 <!-- History modal -->
-<div class="modal-backdrop" id="historyModal" onclick="if(event.target===this)closeHistory()">
+<div class="modal-backdrop" id="historyModal" role="dialog" aria-modal="true" aria-label="History">
   <div class="modal modal-history">
     <div class="modal-header">
       <h3>History</h3>
-      <button class="btn-modal-close" onclick="closeHistory()">×</button>
+      <button class="btn-modal-close" >×</button>
     </div>
     <div class="history-list" id="historyList"></div>
   </div>
 </div>
 
-<!-- Workout input modal -->
-<div class="modal-backdrop" id="workoutModal" onclick="if(event.target===this)closeWorkoutModal(false)">
+<!-- Records modal -->
+<div class="modal-backdrop" id="recordsModal" role="dialog" aria-modal="true" aria-label="Personal Records">
+  <div class="modal modal-history">
+    <div class="modal-header">
+      <h3>Personal Records</h3>
+      <button class="btn-modal-close" aria-label="Close records" data-action="closeRecords">×</button>
+    </div>
+    <div id="recordsLoading" style="display:none" class="history-empty">Loading…</div>
+    <div class="history-list" id="recordsList"></div>
+  </div>
+</div>
+<div class="modal-backdrop" id="workoutModal" role="dialog" aria-modal="true" aria-labelledby="modalExName">
   <div class="modal">
-    <h3>Log your effort</h3>
+    <div class="modal-header">
+      <h3>Log your effort</h3>
+      <button class="btn-modal-close" >×</button>
+    </div>
     <div class="modal-exercise-name" id="modalExName"></div>
     <div class="modal-fields">
       <!-- Reps / Duration toggle -->
       <div class="modal-field">
         <div class="modal-type-toggle">
-          <button class="modal-type-btn active" id="modalTypeReps" onclick="setModalType('reps')">Reps</button>
-          <button class="modal-type-btn" id="modalTypeDuration" onclick="setModalType('duration')">Duration</button>
+          <button class="modal-type-btn active" id="modalTypeReps" >Reps</button>
+          <button class="modal-type-btn" id="modalTypeDuration" >Duration</button>
         </div>
       </div>
       <!-- Reps input -->
@@ -1142,11 +1195,15 @@
 </div>
 
 <!-- Manual log picker modal -->
-<div class="modal-backdrop" id="manualLogModal" onclick="if(event.target===this)closeManualLog()">
+<div class="modal-backdrop" id="manualLogModal" role="dialog" aria-modal="true" aria-label="Log activity">
   <div class="modal">
+    <div class="modal-header">
+      <h3>Log activity</h3>
+      <button class="btn-modal-close" >×</button>
+    </div>
     <div class="picker-tabs">
-      <button class="picker-tab active" id="tabFromList" onclick="switchPickerTab('list')">From list</button>
-      <button class="picker-tab" id="tabCustom" onclick="switchPickerTab('custom')">Custom activity</button>
+      <button class="picker-tab active" id="tabFromList" >From list</button>
+      <button class="picker-tab" id="tabCustom" >Custom activity</button>
     </div>
 
     <!-- From list -->
@@ -1160,11 +1217,11 @@
       <div class="custom-templates">
         <div class="custom-templates-label">Quick pick</div>
         <div class="custom-template-btns">
-          <button class="custom-template-btn" onclick="applyCustomTemplate('Volleyball','Cardio')">🏐 Volleyball</button>
-          <button class="custom-template-btn" onclick="applyCustomTemplate('Padel','Cardio')">🎾 Padel</button>
-          <button class="custom-template-btn" onclick="applyCustomTemplate('Running','Cardio')">🏃 Running</button>
-          <button class="custom-template-btn" onclick="applyCustomTemplate('Sprint','Cardio')">⚡ Sprint</button>
-          <button class="custom-template-btn" onclick="applyCustomTemplate('Cycling','Cardio')">🚴 Cycling</button>
+          <button class="custom-template-btn">🏐 Volleyball</button>
+          <button class="custom-template-btn">🎾 Padel</button>
+          <button class="custom-template-btn">🏃 Running</button>
+          <button class="custom-template-btn">⚡ Sprint</button>
+          <button class="custom-template-btn">🚴 Cycling</button>
         </div>
       </div>
       <div class="picker-custom-fields">
@@ -1175,12 +1232,12 @@
           <option>Mobility</option><option>Grip</option><option>Skill</option>
         </select>
       </div>
-      <button class="editor-add-btn" onclick="logCustomActivity()">Log activity</button>
+      <button class="editor-add-btn" data-action="logCustom">Log activity</button>
     </div>
   </div>
 </div>
 
-<div class="notification" id="notification"></div>
+<div class="notification" id="notification" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 // ── Supabase ──
@@ -1218,11 +1275,17 @@ async function initAuth() {
 function showApp() {
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('mainApp').style.display = '';
-  initApp();
+  if (!_appInitialized) {
+    _appInitialized = true;
+    initApp();
+  }
 }
 
 // ── Auth UI ──
+let _appInitialized = false;
 let authMode = 'signin';
+document.getElementById('btnSignOut').addEventListener('click', () => sb.auth.signOut());
+
 document.getElementById('authToggleBtn').addEventListener('click', () => {
   authMode = authMode === 'signin' ? 'signup' : 'signin';
   document.getElementById('authTitle').textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
@@ -1271,6 +1334,32 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
 });
 
 // ── Supabase DB sync ──
+async function loadPersonalRecords() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await sb.from('workout_log')
+      .select('exercise_name, reps, duration_seconds, weight')
+      .eq('user_id', currentUser.id)
+      .neq('how', 'skip');
+    if (error || !data) return;
+    personalRecords = {};
+    data.forEach(r => updateRecordCache(r.exercise_name, {
+      reps: parseInt(r.reps) || 0,
+      duration_seconds: parseInt(r.duration_seconds) || 0,
+      weight: parseFloat(r.weight) || 0
+    }));
+    updateExerciseDisplay(); // refresh card if already showing an exercise
+  } catch(e) { console.error('records cache error:', e); }
+}
+
+function updateRecordCache(name, detail) {
+  if (!name || !detail) return;
+  if (!personalRecords[name]) personalRecords[name] = { bestReps: 0, bestDur: 0, bestWeight: 0 };
+  const rec = personalRecords[name];
+  if ((detail.reps || 0) > rec.bestReps) rec.bestReps = detail.reps;
+  if ((detail.duration_seconds || 0) > rec.bestDur) rec.bestDur = detail.duration_seconds;
+  if ((detail.weight || 0) > rec.bestWeight) rec.bestWeight = detail.weight;
+}
 async function syncLogToDB(entry) {
   if (!currentUser) return;
   try {
@@ -1300,7 +1389,10 @@ async function syncLogToDB(entry) {
 async function loadLogsFromDB() {
   if (!currentUser) return null;
   try {
-    const today = new Date(); today.setHours(0,0,0,0);
+    // Use local date seed so users in any timezone see their own day correctly
+    const _seed = getTodaySeed();
+    const _ty = Math.floor(_seed / 10000), _tm = Math.floor((_seed % 10000) / 100), _td = _seed % 100;
+    const today = new Date(_ty, _tm - 1, _td, 0, 0, 0, 0);
     const { data, error } = await sb.from('workout_log')
       .select('*')
       .eq('user_id', currentUser.id)
@@ -1359,7 +1451,7 @@ async function loadHistoryFromDB() {
   if (!currentUser) return;
   try {
     const { data, error } = await sb.from('workout_log')
-      .select('logged_at, exercise_name, category, how, reps, sets, weight')
+      .select('logged_at, exercise_name, category, how, reps, sets, weight, duration_seconds')
       .eq('user_id', currentUser.id)
       .order('logged_at', { ascending: false });
     if (error || !data) return;
@@ -1374,7 +1466,9 @@ async function loadHistoryFromDB() {
         category: r.category,
         time: d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
         how: r.how,
-        detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null
+        detail: (r.reps || r.sets || r.weight || r.duration_seconds)
+          ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
+          : null
       });
     });
     // Cache in localStorage for offline access
@@ -1393,7 +1487,6 @@ const DEFAULT_EXERCISES = [
   { name: "Stair Climbing",            category: "Cardio",     note: "Up and down fast, until failure" },
   { name: "World's Greatest Stretch", category: "Mobility",   note: "Hold 30s each side" },
   { name: "Cat Cow",                  category: "Mobility",   note: "Slow, breathe through it" },
-  { name: "Twist",                    category: "Mobility",   note: "15s each side" },
   { name: "Dead Hang",                category: "Grip",       note: "Hold as long as possible" },
   { name: "Pull Ups",                 category: "Pulling",    note: "Max reps" },
   { name: "Pull Up Hold",             category: "Pulling",    note: "Hold at top, chin over bar" },
@@ -1448,6 +1541,13 @@ const EXERCISE_MIGRATIONS = [
         ex.note = 'Kneel, lean forward as slow as you can';
       }
       return exercises;
+    }
+  },
+  {
+    version: 2,
+    description: 'Remove Twist from exercise list',
+    apply(exercises) {
+      return exercises.filter(e => e.name !== 'Twist');
     }
   },
   // Add future migrations here, e.g.:
@@ -1523,6 +1623,8 @@ let timerStartTime = null;   // Date.now() when current countdown began
 let timerInterval = null;
 let sessionActive = false;
 let streak = 0;
+// Cache of personal bests keyed by exercise name
+let personalRecords = {};
 
 const CIRCUMFERENCE = 2 * Math.PI * 118;
 
@@ -1558,6 +1660,11 @@ function seededShuffle(arr, rng) {
 function getTodaySeed() {
   const d = new Date();
   return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+function getTodayLocalMidnight() {
+  const s = getTodaySeed();
+  return new Date(Math.floor(s/10000), Math.floor((s%10000)/100)-1, s%100, 0, 0, 0, 0);
 }
 
 function buildDailyQueue() {
@@ -1633,7 +1740,7 @@ function tick() {
 // Re-sync timer display when tab becomes visible again
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
-  if (timerStartTime) {
+  if (sessionActive && timerStartTime) {
     const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
     if (elapsed >= totalSeconds) {
       clearInterval(timerInterval);
@@ -1641,8 +1748,6 @@ document.addEventListener('visibilitychange', () => {
     }
   }
 });
-
-
 
 
 let dailyLog = [];
@@ -1665,7 +1770,14 @@ function saveState() {
       intervalMinutes,
       shuffle: shuffleEl ? shuffleEl.checked : true
     }));
-  } catch(e) { console.error('saveState error:', e); }
+  } catch(e) {
+    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      console.warn('localStorage quota exceeded — state not saved. Try clearing old history.');
+      notify('⚠ Storage full — clear old history in History tab');
+    } else {
+      console.error('saveState error:', e);
+    }
+  }
 }
 
 function loadSettings() {
@@ -1702,8 +1814,10 @@ function addToLog(ex, how, detail, loggedAt) {
   const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
   const entry = { name: ex.name, category: ex.category, time, how, detail: detail || null, loggedAt: now.toISOString() };
   dailyLog.unshift(entry);
-  streak++;
+  streak = dailyLog.filter(e => e.how !== 'skip').length;
   document.getElementById('statDone').textContent = streak;
+  // Update personal record cache immediately so card refreshes without a reload
+  if (detail) updateRecordCache(ex.name, detail);
   saveState();
   syncLogToDB(entry);
   renderLog();
@@ -1850,7 +1964,7 @@ async function resetDay() {
   // Delete today's logs from Supabase
   if (currentUser) {
     try {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const today = getTodayLocalMidnight();
       await sb.from('workout_log')
         .delete()
         .eq('user_id', currentUser.id)
@@ -1889,7 +2003,7 @@ async function clearLog() {
   // Delete today's logs from Supabase
   if (currentUser) {
     try {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const today = getTodayLocalMidnight();
       await sb.from('workout_log')
         .delete()
         .eq('user_id', currentUser.id)
@@ -1944,7 +2058,8 @@ async function deleteLogEntry(idx) {
 
 function doneExercise() {
   clearInterval(timerInterval);
-  const ex = queue[currentIdx % queue.length];
+  if (currentIdx >= queue.length) return;
+  const ex = queue[currentIdx];
   if (!ex) return;
   document.getElementById('btnDone').disabled = true;
 
@@ -2024,6 +2139,7 @@ function startSession() {
   btnStart.classList.remove('warn-restart');
   btnStart.disabled = true;
   btnStart.textContent = 'Session active';
+  clearInterval(timerInterval); // clear any lingering timer
   sessionActive = true;
   if (queue.length === 0 || currentIdx >= queue.length) rebuildQueue();
   updateExerciseDisplay();
@@ -2062,7 +2178,7 @@ function subscribeRealtime() {
         saveState();
 
         // Check whether this is the currently queued exercise BEFORE removing it
-        const currentEx = queue[currentIdx % queue.length];
+        const currentEx = currentIdx < queue.length ? queue[currentIdx] : null;
         const wasCurrentExercise = currentEx && currentEx.name === entry.name;
 
         removeFromQueue(entry.name);
@@ -2100,22 +2216,23 @@ function scheduleMidnightReset() {
   midnight.setHours(24, 0, 0, 0);
   const msUntilMidnight = midnight - now;
   setTimeout(() => {
+    // TODAY_KEY is a const so we need to reload the page to get the new date key.
+    // The cleanest approach: reload if a session is not active, otherwise just reset state.
+    if (!sessionActive) {
+      location.reload();
+      return;
+    }
     dailyLog = [];
     streak = 0;
     currentIdx = 0;
+    skippedToday = new Set();
     document.getElementById('statDone').textContent = 0;
     rebuildQueue();
     updateExerciseDisplay();
     renderQueue();
     renderLog();
     updateDayProgress();
-    // Only resume countdown if a session was already running
-    if (sessionActive) {
-      startCountdown();
-    } else {
-      document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
-      updateRing(1, 1);
-    }
+    startCountdown();
     scheduleMidnightReset(); // schedule next day
   }, msUntilMidnight);
 }
@@ -2127,7 +2244,7 @@ function triggerExercise() {
   exerciseTriggered = true;
   clearInterval(timerInterval);
   timerStartTime = null;
-  const ex = queue[currentIdx % queue.length];
+  const ex = currentIdx < queue.length ? queue[currentIdx] : null;
   if (!ex) { exerciseTriggered = false; return; }
 
   notify(`⚡ ${ex.name}`);
@@ -2143,21 +2260,24 @@ function triggerExercise() {
 }
 
 function skipExercise() {
-  const ex = queue[currentIdx % queue.length];
-  if (!ex) return;
+  if (currentIdx >= queue.length) return;
+  const ex = queue[currentIdx];
   clearInterval(timerInterval);
 
   // Track as skipped so it stays at the end after reload
   skippedToday.add(ex.name);
 
-  // Move exercise to end of queue — don't log it
+  // Move to end — splice then push so length is temporarily -1 then restored
   queue.splice(currentIdx, 1);
   queue.push(ex);
 
   saveState();
   updateDayProgress();
 
-  if (currentIdx >= queue.length) {
+  // Check all-done AFTER push so queue.length is back to its real value
+  // (checking after splice would falsely trigger when currentIdx was at the last slot)
+  if (currentIdx >= queue.length - 1 && queue.every(q => skippedToday.has(q.name))) {
+    // Every remaining item has been skipped — nowhere to go
     showAllDone();
     return;
   }
@@ -2170,12 +2290,31 @@ function skipExercise() {
 }
 
 function updateExerciseDisplay() {
-  const ex = queue[currentIdx % queue.length];
+  const ex = currentIdx < queue.length ? queue[currentIdx] : null;
   if (!ex) return;
   document.getElementById('exCategory').textContent = ex.category;
   document.getElementById('exCategory').style.color = CATEGORY_COLORS[ex.category] || '#60a5fa';
   document.getElementById('exName').textContent = ex.name;
   document.getElementById('exNote').textContent = ex.note;
+
+  // Show personal best
+  const rec = personalRecords[ex.name];
+  const recordEl = document.getElementById('exRecord');
+  if (rec && (rec.bestReps > 0 || rec.bestDur > 0)) {
+    const parts = [];
+    if (rec.bestReps > 0) parts.push(`🏆 ${rec.bestReps} reps`);
+    if (rec.bestDur  > 0) {
+      const h = Math.floor(rec.bestDur / 3600);
+      const m = Math.floor((rec.bestDur % 3600) / 60);
+      const s = rec.bestDur % 60;
+      const dur = [h ? `${h}h` : '', m ? `${m}m` : '', s ? `${s}s` : ''].filter(Boolean).join(' ');
+      parts.push(`⏱ ${dur}`);
+    }
+    if (rec.bestWeight > 0) parts.push(`⚖ ${rec.bestWeight}kg`);
+    recordEl.innerHTML = parts.map(p => `<span class="record-badge ${p.startsWith('🏆') ? 'record-badge-reps' : p.startsWith('⏱') ? 'record-badge-dur' : 'record-badge-wt'}">${p}</span>`).join('');
+  } else {
+    recordEl.innerHTML = '';
+  }
 }
 
 function renderQueue() {
@@ -2399,6 +2538,94 @@ function openHistory() {
 
 function closeHistory() {
   document.getElementById('historyModal').classList.remove('open');
+}
+
+function openRecords() {
+  document.getElementById('recordsModal').classList.add('open');
+  loadRecordsFromDB();
+}
+
+function closeRecords() {
+  document.getElementById('recordsModal').classList.remove('open');
+}
+
+async function loadRecordsFromDB() {
+  const list = document.getElementById('recordsList');
+  list.innerHTML = '<div class="history-empty">Loading…</div>';
+  if (!currentUser) { list.innerHTML = '<div class="history-empty">Sign in to see records</div>'; return; }
+
+  try {
+    // Fetch all logged entries with reps or duration (how = done or manual, not skip)
+    const { data, error } = await sb.from('workout_log')
+      .select('exercise_name, category, reps, sets, weight, duration_seconds')
+      .eq('user_id', currentUser.id)
+      .neq('how', 'skip');
+    if (error || !data) throw error;
+
+    // Aggregate client-side: best reps, best duration, best weight per exercise
+    const records = {};
+    data.forEach(r => {
+      const name = r.exercise_name;
+      if (!records[name]) records[name] = { category: r.category, bestReps: null, bestDur: null, bestWeight: null };
+      const rec = records[name];
+
+      const reps = parseInt(r.reps);
+      if (!isNaN(reps) && reps > 0) {
+        if (rec.bestReps === null || reps > rec.bestReps) rec.bestReps = reps;
+      }
+      const dur = parseInt(r.duration_seconds);
+      if (!isNaN(dur) && dur > 0) {
+        if (rec.bestDur === null || dur > rec.bestDur) rec.bestDur = dur;
+      }
+      const wt = parseFloat(r.weight);
+      if (!isNaN(wt) && wt > 0) {
+        if (rec.bestWeight === null || wt > rec.bestWeight) rec.bestWeight = wt;
+      }
+    });
+
+    // Filter to only exercises that have at least one record
+    const entries = Object.entries(records).filter(([, r]) =>
+      r.bestReps !== null || r.bestDur !== null
+    );
+
+    if (entries.length === 0) {
+      list.innerHTML = '<div class="history-empty">No records yet — start logging reps or durations to track your bests.</div>';
+      return;
+    }
+
+    // Sort by BUCKET_ORDER category then name
+    entries.sort(([nameA, recA], [nameB, recB]) => {
+      const ci = (BUCKET_ORDER.indexOf(recA.category) + 99) % 99 - (BUCKET_ORDER.indexOf(recB.category) + 99) % 99;
+      return ci !== 0 ? ci : nameA.localeCompare(nameB);
+    });
+
+    function fmtDur(s) {
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      return [h ? `${h}h` : '', m ? `${m}m` : '', sec ? `${sec}s` : ''].filter(Boolean).join(' ') || '0s';
+    }
+
+    let lastCat = null;
+    list.innerHTML = entries.map(([name, rec]) => {
+      const color = CATEGORY_COLORS[rec.category] || '#60a5fa';
+      let header = '';
+      if (rec.category !== lastCat) {
+        lastCat = rec.category;
+        header = `<div class="records-cat-header" style="color:${color}">${rec.category}</div>`;
+      }
+      const badges = [
+        rec.bestReps !== null ? `<span class="record-badge record-badge-reps">🏆 ${rec.bestReps} reps</span>` : '',
+        rec.bestDur  !== null ? `<span class="record-badge record-badge-dur">⏱ ${fmtDur(rec.bestDur)}</span>` : '',
+        rec.bestWeight !== null ? `<span class="record-badge record-badge-wt">⚖ ${rec.bestWeight}kg</span>` : '',
+      ].filter(Boolean).join('');
+      return `${header}<div class="records-row">
+        <span class="records-name">${name}</span>
+        <div class="records-badges">${badges}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('records error:', e);
+    list.innerHTML = '<div class="history-empty">Failed to load records</div>';
+  }
 }
 
 async function renderHistory() {
@@ -2695,13 +2922,19 @@ function syncQueueWithLog() {
   // so they don't appear as the next exercise after a reload
   if (skippedToday.size > 0) {
     const toMove = [];
+    for (let i = currentIdx; i < queue.length; i++) {
+      if (skippedToday.has(queue[i].name)) {
+        toMove.push(queue[i]);
+      }
+    }
+    // Remove them from their current positions (iterate backwards to preserve indices)
     for (let i = queue.length - 1; i >= currentIdx; i--) {
       if (skippedToday.has(queue[i].name)) {
-        toMove.push(...queue.splice(i, 1));
+        queue.splice(i, 1);
       }
     }
     // Re-append them at the end in their original relative order
-    toMove.reverse().forEach(ex => queue.push(ex));
+    toMove.forEach(ex => queue.push(ex));
   }
 
   updateDayProgress();
@@ -2740,9 +2973,11 @@ async function initApp() {
   });
 
   subscribeRealtime();
+  scheduleMidnightReset();
 
   const lastLoggedAt = await loadLogsFromDB();
   loadHistoryFromDB();
+  loadPersonalRecords();
 
   if (lastLoggedAt) {
     // Resume session — calculate time since last log
@@ -2774,11 +3009,60 @@ async function initApp() {
   }
 }
 
+// ── Static button event listeners (CSP-safe, no inline onclick) ──
+function bindStaticButtons() {
+  const $ = id => document.getElementById(id);
+
+  $('btnStart')       ?.addEventListener('click', startSession);
+  $('btnDone')        ?.addEventListener('click', doneExercise);
+  $('btnSkip')        ?.addEventListener('click', skipExercise);
+  $('btnResetTrigger')?.addEventListener('click', showResetConfirm);
+  $('btnClearLog')    ?.addEventListener('click', showClearLogConfirm);
+
+  document.querySelector('[aria-label="Toggle settings"]')?.addEventListener('click', toggleSettings);
+  document.querySelector('[aria-label="Edit exercise list"]')?.addEventListener('click', toggleEditor);
+  document.querySelector('[aria-label="View workout history"]')?.addEventListener('click', openHistory);
+  document.querySelector('[aria-label="Manually log an activity"]')?.addEventListener('click', openManualLog);
+
+  document.querySelector('.btn-cancel-small[data-action="hideReset"]')?.addEventListener('click', hideResetConfirm);
+  document.querySelector('.btn-danger[data-action="confirmReset"]')?.addEventListener('click', confirmReset);
+  document.querySelector('.btn-cancel-small[data-action="hideClear"]')?.addEventListener('click', hideClearLogConfirm);
+  document.querySelector('.btn-danger[data-action="confirmClear"]')?.addEventListener('click', confirmClearLog);
+
+  document.querySelector('.editor-add-btn[data-action="addExercise"]')?.addEventListener('click', addExercise);
+  document.querySelector('.editor-add-btn[data-action="logCustom"]')?.addEventListener('click', logCustomActivity);
+
+  document.querySelector('#historyModal .btn-modal-close')?.addEventListener('click', closeHistory);
+  document.querySelector('#workoutModal .btn-modal-close')?.addEventListener('click', () => closeWorkoutModal(false));
+  document.querySelector('#manualLogModal .btn-modal-close')?.addEventListener('click', closeManualLog);
+
+  $('historyModal')   ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeHistory(); });
+  $('workoutModal')   ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeWorkoutModal(false); });
+  $('manualLogModal') ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeManualLog(); });
+
+  $('modalTypeReps')    ?.addEventListener('click', () => setModalType('reps'));
+  $('modalTypeDuration')?.addEventListener('click', () => setModalType('duration'));
+
+  $('tabFromList')?.addEventListener('click', () => switchPickerTab('list'));
+  $('tabCustom')  ?.addEventListener('click', () => switchPickerTab('custom'));
+
+  document.querySelectorAll('.custom-template-btn[data-name]').forEach(btn => {
+    btn.addEventListener('click', () => applyCustomTemplate(btn.dataset.name, btn.dataset.cat));
+  });
+
+  document.querySelector('.log-clear[data-action="editorDone"]')?.addEventListener('click', toggleEditor);
+
+  document.querySelector('[data-action="openRecords"]')?.addEventListener('click', openRecords);
+  document.querySelector('[data-action="closeRecords"]')?.addEventListener('click', closeRecords);
+  $('recordsModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecords(); });
+}
+
 // ── Boot ──
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAuth);
+  document.addEventListener('DOMContentLoaded', () => { initAuth(); bindStaticButtons(); });
 } else {
   initAuth();
+  bindStaticButtons();
 }
 </script>
 </body>
