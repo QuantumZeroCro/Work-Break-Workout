@@ -1047,7 +1047,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.45</div>
+    <div class="app-version">v0.44</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -2309,9 +2309,9 @@ function subscribeRealtime() {
         how: r.how,
         detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null
       };
-      // Only add if not already in log (this device may have added it)
+      // Only add if not already in log, and not a record-correction row
       const alreadyLogged = dailyLog.some(e => e.name === entry.name && e.time === entry.time);
-      if (!alreadyLogged) {
+      if (!alreadyLogged && r.how !== 'record') {
         dailyLog.unshift(entry);
         streak = dailyLog.filter(e => e.how !== 'skip').length;
         document.getElementById('statDone').textContent = streak;
