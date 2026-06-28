@@ -1047,7 +1047,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.44</div>
+    <div class="app-version">v0.47</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1118,6 +1118,17 @@
     <div class="reset-confirm-btns">
       <button class="btn-cancel-small" data-action="hideReset">Cancel</button>
       <button class="btn-danger" data-action="confirmReset">Yes, reset today</button>
+    </div>
+  </div>
+  <div class="setting-row">
+    <label class="label-danger">Reset records</label>
+    <button id="btnResetRecordsTrigger" class="btn-danger">Reset</button>
+  </div>
+  <div class="reset-confirm" id="resetRecordsConfirm">
+    <div class="reset-confirm-msg">This will permanently delete all your personal records. This cannot be undone.</div>
+    <div class="reset-confirm-btns">
+      <button class="btn-cancel-small" onclick="hideResetRecordsConfirm()">Cancel</button>
+      <button class="btn-danger" onclick="confirmResetRecords()">Yes, reset records</button>
     </div>
   </div>
 </div>
@@ -1429,18 +1440,19 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
 async function loadPersonalRecords() {
   if (!currentUser) return;
   try {
-    const { data, error } = await sb.from('workout_log')
+    const { data, error } = await sb.from('personal_records')
       .select('exercise_name, reps, duration_seconds, weight')
-      .eq('user_id', currentUser.id)
-      .neq('how', 'skip');
+      .eq('user_id', currentUser.id);
     if (error || !data) return;
     personalRecords = {};
-    data.forEach(r => updateRecordCache(r.exercise_name, {
-      reps: parseInt(r.reps) || 0,
-      duration_seconds: parseInt(r.duration_seconds) || 0,
-      weight: parseFloat(r.weight) || 0
-    }));
-    updateExerciseDisplay(); // refresh card if already showing an exercise
+    data.forEach(r => {
+      personalRecords[r.exercise_name] = {
+        bestReps:   r.reps   || 0,
+        bestDur:    r.duration_seconds || 0,
+        bestWeight: r.weight || 0,
+      };
+    });
+    updateExerciseDisplay();
   } catch(e) { console.error('records cache error:', e); }
 }
 
@@ -1448,9 +1460,31 @@ function updateRecordCache(name, detail) {
   if (!name || !detail) return;
   if (!personalRecords[name]) personalRecords[name] = { bestReps: 0, bestDur: 0, bestWeight: 0 };
   const rec = personalRecords[name];
-  if ((detail.reps || 0) > rec.bestReps) rec.bestReps = detail.reps;
-  if ((detail.duration_seconds || 0) > rec.bestDur) rec.bestDur = detail.duration_seconds;
-  if ((detail.weight || 0) > rec.bestWeight) rec.bestWeight = detail.weight;
+
+  const newReps   = parseInt(detail.reps)             || 0;
+  const newDur    = parseInt(detail.duration_seconds)  || 0;
+  const newWeight = parseFloat(detail.weight)          || 0;
+
+  const repsBeat   = newReps   > rec.bestReps;
+  const durBeat    = newDur    > rec.bestDur;
+  const weightBeat = newWeight > rec.bestWeight;
+
+  if (repsBeat)   rec.bestReps   = newReps;
+  if (durBeat)    rec.bestDur    = newDur;
+  if (weightBeat) rec.bestWeight = newWeight;
+
+  // Persist to personal_records if any field improved
+  if (currentUser && (repsBeat || durBeat || weightBeat)) {
+    sb.from('personal_records').upsert({
+      user_id:          currentUser.id,
+      exercise_name:    name,
+      reps:             rec.bestReps   || null,
+      duration_seconds: rec.bestDur    || null,
+      weight:           rec.bestWeight || null,
+      updated_at:       new Date().toISOString(),
+    }, { onConflict: 'user_id,exercise_name' })
+    .then(({ error }) => { if (error) console.error('record upsert error:', error); });
+  }
 }
 async function syncLogToDB(entry) {
   if (!currentUser) return;
@@ -2056,6 +2090,33 @@ function showResetConfirm() {
 function hideResetConfirm() {
   document.getElementById('resetConfirm').classList.remove('open');
   document.getElementById('btnResetTrigger').style.display = '';
+}
+
+function showResetRecordsConfirm() {
+  document.getElementById('resetRecordsConfirm').classList.add('open');
+  document.getElementById('btnResetRecordsTrigger').style.display = 'none';
+}
+
+function hideResetRecordsConfirm() {
+  document.getElementById('resetRecordsConfirm').classList.remove('open');
+  document.getElementById('btnResetRecordsTrigger').style.display = '';
+}
+
+async function confirmResetRecords() {
+  hideResetRecordsConfirm();
+  if (!currentUser) return;
+  try {
+    const { error } = await sb.from('personal_records')
+      .delete()
+      .eq('user_id', currentUser.id);
+    if (error) throw error;
+    personalRecords = {};
+    updateExerciseDisplay();
+    notify('Records cleared');
+  } catch(e) {
+    console.error('reset records error:', e);
+    notify('Failed to reset records');
+  }
 }
 
 async function confirmReset() {
@@ -2783,50 +2844,37 @@ async function saveNewRecord(ex, detail) {
   if (!detail) return;
   if (!currentUser) { notify('Not signed in'); return; }
 
-  const reps = detail.reps ? String(detail.reps) : null;
+  const reps   = detail.reps ? parseInt(detail.reps) : null;
   const durSec = detail.duration_seconds || null;
   const weight = detail.weight || null;
 
   try {
-    // Delete any existing record rows for this exercise with the same field type
-    // so the new value is definitive
-    if (reps) {
-      await sb.from('workout_log')
-        .delete()
-        .eq('user_id', currentUser.id)
-        .eq('exercise_name', ex.name)
-        .eq('how', 'record')
-        .not('reps', 'is', null)
-        .neq('reps', '');
-    }
-    if (durSec) {
-      await sb.from('workout_log')
-        .delete()
-        .eq('user_id', currentUser.id)
-        .eq('exercise_name', ex.name)
-        .eq('how', 'record')
-        .not('duration_seconds', 'is', null)
-        .gt('duration_seconds', 0);
-    }
+    // Fetch existing record so we can merge (keep whichever field we're not setting)
+    const { data: existing } = await sb.from('personal_records')
+      .select('reps, duration_seconds, weight')
+      .eq('user_id', currentUser.id)
+      .eq('exercise_name', ex.name)
+      .maybeSingle();
 
-    const { error } = await sb.from('workout_log').insert({
+    const { error } = await sb.from('personal_records').upsert({
       user_id:          currentUser.id,
       exercise_name:    ex.name,
       category:         ex.category || null,
-      how:              'record',
-      reps,
-      sets:             detail.sets || 1,
-      weight,
-      duration_seconds: durSec,
-      logged_at:        new Date().toISOString(),
-    });
+      reps:             reps   ?? existing?.reps   ?? null,
+      duration_seconds: durSec ?? existing?.duration_seconds ?? null,
+      weight:           weight ?? existing?.weight ?? null,
+      updated_at:       new Date().toISOString(),
+    }, { onConflict: 'user_id,exercise_name' });
     if (error) throw error;
 
-    // Update in-memory cache
-    updateRecordCache(ex.name, { reps, weight, duration_seconds: durSec });
+    // Update in-memory cache directly
+    personalRecords[ex.name] = {
+      bestReps:   reps   ?? personalRecords[ex.name]?.bestReps   ?? 0,
+      bestDur:    durSec ?? personalRecords[ex.name]?.bestDur    ?? 0,
+      bestWeight: weight ?? personalRecords[ex.name]?.bestWeight ?? 0,
+    };
 
     notify(`🏆 Record saved — ${ex.name}`);
-    // Refresh records list if modal is still open
     if (document.getElementById('recordsModal').classList.contains('open')) {
       loadRecordsFromDB();
     }
@@ -2851,34 +2899,20 @@ async function loadRecordsFromDB() {
   if (!currentUser) { list.innerHTML = '<div class="history-empty">Sign in to see records</div>'; return; }
 
   try {
-    const { data, error } = await sb.from('workout_log')
-      .select('exercise_name, category, reps, sets, weight, duration_seconds')
+    const { data, error } = await sb.from('personal_records')
+      .select('exercise_name, category, reps, duration_seconds, weight')
       .eq('user_id', currentUser.id)
-      .neq('how', 'skip');
-    if (error || !data) throw error;
+      .order('exercise_name');
+    if (error) throw error;
 
-    const records = {};
-    data.forEach(r => {
-      const name = r.exercise_name;
-      if (!records[name]) records[name] = { category: r.category, bestReps: null, bestDur: null, bestWeight: null };
-      const rec = records[name];
-      const reps = parseInt(r.reps);
-      if (!isNaN(reps) && reps > 0) {
-        if (rec.bestReps === null || reps > rec.bestReps) rec.bestReps = reps;
-      }
-      const dur = parseInt(r.duration_seconds);
-      if (!isNaN(dur) && dur > 0) {
-        if (rec.bestDur === null || dur > rec.bestDur) rec.bestDur = dur;
-      }
-      const wt = parseFloat(r.weight);
-      if (!isNaN(wt) && wt > 0) {
-        if (rec.bestWeight === null || wt > rec.bestWeight) rec.bestWeight = wt;
-      }
-    });
-
-    const entries = Object.entries(records).filter(([, r]) =>
-      r.bestReps !== null || r.bestDur !== null
-    );
+    const entries = (data || []).filter(r =>
+      (r.reps && r.reps > 0) || (r.duration_seconds && r.duration_seconds > 0)
+    ).map(r => [r.exercise_name, {
+      category:   r.category,
+      bestReps:   r.reps   || null,
+      bestDur:    r.duration_seconds || null,
+      bestWeight: r.weight || null,
+    }]);
 
     if (entries.length === 0) {
       list.innerHTML = '<div class="history-empty">No records yet — start logging reps or durations to track your bests.</div>';
@@ -3009,48 +3043,30 @@ async function saveRecordEdit(i) {
   saveBtn.textContent = 'Saving…'; saveBtn.disabled = true;
 
   try {
-    // Delete all rows for this exercise that have a value in the relevant field
-    let deleteQuery = sb.from('workout_log')
-      .delete()
+    // Fetch existing row so we can preserve the field we're not editing
+    const { data: existing } = await sb.from('personal_records')
+      .select('reps, duration_seconds, weight')
       .eq('user_id', currentUser.id)
       .eq('exercise_name', name)
-      .eq('how', 'record');
+      .maybeSingle();
 
-    if (repsVisible) {
-      deleteQuery = deleteQuery.not('reps', 'is', null).neq('reps', '');
-    } else {
-      deleteQuery = deleteQuery.not('duration_seconds', 'is', null).gt('duration_seconds', 0);
-    }
-
-    const { error: delErr, count } = await deleteQuery;
-    console.log('[record edit] deleted rows:', count, delErr);
-    if (delErr) throw delErr;
-
-    // Insert corrected value with epoch timestamp so daily log never shows it
-    const { error: insErr } = await sb.from('workout_log').insert({
+    const { error } = await sb.from('personal_records').upsert({
       user_id:          currentUser.id,
       exercise_name:    name,
       category:         cat || null,
-      how:              'record',
-      reps:             reps !== null ? String(reps) : null,
-      sets:             1,
-      weight:           weight,
-      duration_seconds: durSec,
-      logged_at:        new Date().toISOString(),
-    });
-    console.log('[record edit] insert error:', insErr);
-    if (insErr) throw insErr;
+      reps:             repsVisible ? reps          : (existing?.reps           ?? null),
+      duration_seconds: !repsVisible ? durSec       : (existing?.duration_seconds ?? null),
+      weight:           weight !== null ? weight    : (existing?.weight          ?? null),
+      updated_at:       new Date().toISOString(),
+    }, { onConflict: 'user_id,exercise_name' });
+    if (error) throw error;
 
-    // Force-reset the personalRecords cache entry so the exercise card badge
-    // reflects the new value immediately (updateRecordCache only goes upward,
-    // so we wipe and rebuild from the new correct values)
-    if (personalRecords[name]) {
-      personalRecords[name] = {
-        bestReps:   repsVisible ? (reps || 0) : personalRecords[name].bestReps,
-        bestDur:    !repsVisible ? (durSec || 0) : personalRecords[name].bestDur,
-        bestWeight: weight || personalRecords[name].bestWeight,
-      };
-    }
+    // Update in-memory cache
+    personalRecords[name] = {
+      bestReps:   repsVisible  ? (reps   || 0) : (personalRecords[name]?.bestReps   || 0),
+      bestDur:    !repsVisible ? (durSec || 0) : (personalRecords[name]?.bestDur    || 0),
+      bestWeight: weight !== null ? weight      : (personalRecords[name]?.bestWeight || 0),
+    };
 
     form.classList.remove('open');
     await loadRecordsFromDB();
@@ -3465,7 +3481,8 @@ function bindStaticButtons() {
   $('btnStart')       ?.addEventListener('click', startSession);
   $('btnDone')        ?.addEventListener('click', doneExercise);
   $('btnSkip')        ?.addEventListener('click', skipExercise);
-  $('btnResetTrigger')?.addEventListener('click', showResetConfirm);
+  $('btnResetTrigger')        ?.addEventListener('click', showResetConfirm);
+  $('btnResetRecordsTrigger') ?.addEventListener('click', showResetRecordsConfirm);
   $('btnClearLog')    ?.addEventListener('click', showClearLogConfirm);
 
   // Ring click — context-sensitive shortcut
@@ -3485,6 +3502,7 @@ function bindStaticButtons() {
   });
   $('btnSkip')        ?.addEventListener('click', skipExercise);
   $('btnResetTrigger')?.addEventListener('click', showResetConfirm);
+  $('btnResetRecordsTrigger') ?.addEventListener('click', showResetRecordsConfirm);
   $('btnClearLog')    ?.addEventListener('click', showClearLogConfirm);
 
   document.querySelector('[aria-label="Toggle settings"]')?.addEventListener('click', toggleSettings);
