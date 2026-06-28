@@ -1047,7 +1047,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.44</div>
+    <div class="app-version">v0.45</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -3013,7 +3013,8 @@ async function saveRecordEdit(i) {
     let deleteQuery = sb.from('workout_log')
       .delete()
       .eq('user_id', currentUser.id)
-      .eq('exercise_name', name);
+      .eq('exercise_name', name)
+      .eq('how', 'record');
 
     if (repsVisible) {
       deleteQuery = deleteQuery.not('reps', 'is', null).neq('reps', '');
