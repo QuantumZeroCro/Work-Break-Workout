@@ -1047,7 +1047,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.42</div>
+    <div class="app-version">v0.43</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1182,6 +1182,7 @@
   <div class="modal modal-history">
     <div class="modal-header">
       <h3>Personal Records</h3>
+      <button class="btn-ghost" style="font-size:12px;padding:4px 10px;" onclick="openRecordPicker()">+ Add</button>
       <button class="btn-modal-close" aria-label="Close records" data-action="closeRecords">×</button>
     </div>
     <div id="recordsLoading" style="display:none" class="history-empty">Loading…</div>
@@ -1250,6 +1251,35 @@
     <div class="modal-actions">
       <button class="btn-ghost btn-modal-skip" id="modalSkipBtn">Skip logging</button>
       <button class="btn-done btn-modal-save" id="modalSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Record picker modal -->
+<div class="modal-backdrop" id="recordPickerModal" role="dialog" aria-modal="true" aria-label="Add record">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add record</h3>
+      <button class="btn-modal-close" onclick="closeRecordPicker()">×</button>
+    </div>
+    <div class="picker-tabs">
+      <button class="picker-tab active" id="recPickerTabList" onclick="switchRecordPickerTab('list')">From list</button>
+      <button class="picker-tab" id="recPickerTabCustom" onclick="switchRecordPickerTab('custom')">Custom</button>
+    </div>
+    <div id="recPickerPanelList">
+      <input class="picker-search" id="recPickerSearch" placeholder="Search exercises…" oninput="filterRecordPicker(this.value)" />
+      <div class="picker-list" id="recPickerList"></div>
+    </div>
+    <div id="recPickerPanelCustom" style="display:none">
+      <div class="picker-custom-fields">
+        <input class="picker-search" id="recCustomName" placeholder="Activity name…" />
+        <select id="recCustomCat">
+          <option>Cardio</option><option>Core</option><option>Pushing</option>
+          <option>Pulling</option><option>Legs</option><option>Back</option>
+          <option>Mobility</option><option>Grip</option><option>Skill</option>
+        </select>
+      </div>
+      <button class="editor-add-btn" onclick="selectRecordCustom()">Continue</button>
     </div>
   </div>
 </div>
@@ -2686,6 +2716,124 @@ function closeHistory() {
   document.getElementById('historyModal').classList.remove('open');
 }
 
+function openRecordPicker() {
+  document.getElementById('recPickerSearch').value = '';
+  filterRecordPicker('');
+  switchRecordPickerTab('list');
+  document.getElementById('recordPickerModal').classList.add('open');
+  setTimeout(() => document.getElementById('recPickerSearch').focus(), 100);
+}
+
+function closeRecordPicker() {
+  document.getElementById('recordPickerModal').classList.remove('open');
+}
+
+function switchRecordPickerTab(tab) {
+  const isList = tab === 'list';
+  document.getElementById('recPickerPanelList').style.display = isList ? '' : 'none';
+  document.getElementById('recPickerPanelCustom').style.display = isList ? 'none' : '';
+  document.getElementById('recPickerTabList').classList.toggle('active', isList);
+  document.getElementById('recPickerTabCustom').classList.toggle('active', !isList);
+  if (!isList) setTimeout(() => document.getElementById('recCustomName').focus(), 100);
+}
+
+function filterRecordPicker(query) {
+  const q = query.toLowerCase();
+  const matches = EXERCISES.filter(e => !q || e.name.toLowerCase().includes(q));
+  const list = document.getElementById('recPickerList');
+  if (matches.length === 0) { list.innerHTML = '<div class="picker-empty">No matches</div>'; return; }
+  list.innerHTML = matches.map(ex => {
+    const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
+    const safeName = ex.name.replace(/"/g, '&quot;');
+    return `<div class="picker-item" data-exname="${safeName}">
+      <span class="editor-item-cat" style="background:${color}">${ex.category}</span>
+      <span>${ex.name}</span>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.picker-item').forEach(el => {
+    el.addEventListener('click', () => selectRecordExercise(el.dataset.exname));
+  });
+}
+
+function selectRecordExercise(name) {
+  const ex = EXERCISES.find(e => e.name === name);
+  if (!ex) return;
+  closeRecordPicker();
+  setTimeout(() => openRecordWorkoutModal(ex), 150);
+}
+
+function selectRecordCustom() {
+  const name = document.getElementById('recCustomName').value.trim();
+  if (!name) { document.getElementById('recCustomName').focus(); return; }
+  const cat = document.getElementById('recCustomCat').value;
+  closeRecordPicker();
+  setTimeout(() => openRecordWorkoutModal({ name, category: cat, note: '' }), 150);
+}
+
+function openRecordWorkoutModal(ex) {
+  openWorkoutModal(ex, (detail, loggedAt, _q, cancelled) => {
+    if (cancelled) return;
+    saveNewRecord(ex, detail);
+  });
+}
+
+async function saveNewRecord(ex, detail) {
+  if (!detail) return;
+  if (!currentUser) { notify('Not signed in'); return; }
+
+  const reps = detail.reps ? String(detail.reps) : null;
+  const durSec = detail.duration_seconds || null;
+  const weight = detail.weight || null;
+
+  try {
+    // Delete any existing record rows for this exercise with the same field type
+    // so the new value is definitive
+    if (reps) {
+      await sb.from('workout_log')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('exercise_name', ex.name)
+        .eq('how', 'record')
+        .not('reps', 'is', null)
+        .neq('reps', '');
+    }
+    if (durSec) {
+      await sb.from('workout_log')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('exercise_name', ex.name)
+        .eq('how', 'record')
+        .not('duration_seconds', 'is', null)
+        .gt('duration_seconds', 0);
+    }
+
+    const { error } = await sb.from('workout_log').insert({
+      user_id:          currentUser.id,
+      exercise_name:    ex.name,
+      category:         ex.category || null,
+      how:              'record',
+      reps,
+      sets:             detail.sets || 1,
+      weight,
+      duration_seconds: durSec,
+      logged_at:        new Date().toISOString(),
+    });
+    if (error) throw error;
+
+    // Update in-memory cache
+    updateRecordCache(ex.name, { reps, weight, duration_seconds: durSec });
+
+    notify(`🏆 Record saved — ${ex.name}`);
+    // Refresh records list if modal is still open
+    if (document.getElementById('recordsModal').classList.contains('open')) {
+      loadRecordsFromDB();
+    }
+  } catch(e) {
+    console.error('saveNewRecord error:', e);
+    notify('Failed to save record');
+  }
+}
+
 function openRecords() {
   document.getElementById('recordsModal').classList.add('open');
   loadRecordsFromDB();
@@ -3382,6 +3530,7 @@ function bindStaticButtons() {
 
   document.querySelector('[data-action="openRecords"]')?.addEventListener('click', openRecords);
   document.querySelector('[data-action="closeRecords"]')?.addEventListener('click', closeRecords);
+  $('recordPickerModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecordPicker(); });
   $('recordsModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecords(); });
 }
 
