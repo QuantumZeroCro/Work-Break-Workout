@@ -990,7 +990,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.34</div>
+    <div class="app-version">v0.35</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1002,7 +1002,7 @@
     <circle class="ring-progress" id="ringProgress" cx="130" cy="130" r="118"/>
   </svg>
   <div class="ring-inner">
-    <span class="ring-label" id="ringLabel">next exercise in</span>
+    <span class="ring-label" id="ringLabel">ready to go</span>
     <span class="ring-time" id="ringTime">30:00</span>
     <span class="ring-sublabel" id="ringSubLabel">press start</span>
   </div>
@@ -1849,8 +1849,18 @@ function renderLogDays() {
   const keys = getAllDayKeys();
   if (!keys.includes(TODAY_KEY)) keys.unshift(TODAY_KEY);
   const container = document.getElementById('logDays');
-  if (keys.length <= 1) { container.innerHTML = ''; return; }
-  container.innerHTML = keys.map(key => {
+  // Filter out days (other than today) with no logged exercises
+  const visibleKeys = keys.filter(key => {
+    if (key === TODAY_KEY) return true; // always show today
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return false;
+      const count = (JSON.parse(raw).log || []).filter(e => e.how !== 'skip').length;
+      return count > 0;
+    } catch(e) { return false; }
+  });
+  if (visibleKeys.length <= 1) { container.innerHTML = ''; return; }
+  container.innerHTML = visibleKeys.map(key => {
     let count = 0;
     try {
       const raw = localStorage.getItem(key);
@@ -2962,7 +2972,10 @@ async function initApp() {
   rp.style.strokeDasharray = CIRCUMFERENCE;
   rp.style.strokeDashoffset = 0;
   requestAnimationFrame(() => { rp.style.transition = ''; });
-  document.getElementById('ringTime').textContent = formatTime(intervalMinutes * 60);
+  // Before session starts, show START (not 30:00) since first exercise fires immediately on Start
+  document.getElementById('ringTime').textContent = 'START';
+  document.getElementById('ringLabel').textContent = 'ready to go';
+  document.getElementById('ringSubLabel').textContent = 'press start';
 
   document.getElementById('modalSaveBtn').addEventListener('click', () => closeWorkoutModal(true));
   document.getElementById('modalSkipBtn').addEventListener('click', () => closeWorkoutModal(false));
