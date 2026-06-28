@@ -1003,7 +1003,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.36</div>
+    <div class="app-version">v0.37</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1162,7 +1162,10 @@
       <!-- Reps input -->
       <div class="modal-field" id="modalFieldReps">
         <label>Reps</label>
-        <input type="number" id="modalReps" placeholder="e.g. 12" min="1" />
+        <input type="text" id="modalReps" placeholder="e.g. 12" inputmode="numeric" />
+        <div id="modalRepsWarn" style="display:none;font-size:11px;color:#f59e0b;margin-top:4px;">
+          ⚠ Looks like a duration — switch to the Duration tab instead?
+        </div>
       </div>
       <!-- Duration input (hh:mm:ss) -->
       <div class="modal-field" id="modalFieldDuration" style="display:none">
@@ -2090,7 +2093,37 @@ function doneExercise() {
   if (!ex) return;
   document.getElementById('btnDone').disabled = true;
 
-  openWorkoutModal(ex, (detail, loggedAt, shouldRemoveFromQueue) => {
+  // Snapshot timer state so we can resume if user cancels
+  const wasTriggered = exerciseTriggered;
+  const savedStartTime = timerStartTime;
+  const savedTotalSeconds = totalSeconds;
+
+  openWorkoutModal(ex, (detail, loggedAt, shouldRemoveFromQueue, cancelled) => {
+    if (cancelled) {
+      // User closed the modal without logging — restore everything
+      document.getElementById('btnDone').disabled = false;
+      if (wasTriggered) {
+        // Was in GO! state — re-trigger (no timer to resume)
+        exerciseTriggered = false;
+        triggerExercise();
+      } else if (savedStartTime) {
+        // Was counting down — resume from where we left off
+        timerStartTime = savedStartTime;
+        totalSeconds = savedTotalSeconds;
+        const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+        const remaining = Math.max(0, totalSeconds - elapsed);
+        if (remaining <= 0) {
+          triggerExercise();
+        } else {
+          updateRing(remaining, totalSeconds);
+          document.getElementById('ringTime').textContent = formatTime(remaining);
+          clearInterval(timerInterval);
+          timerInterval = setInterval(tick, 1000);
+        }
+      }
+      return;
+    }
+
     notify(`✓ Done — ${ex.name}`);
     addToLog(ex, 'done', detail, loggedAt);
 
@@ -2465,6 +2498,7 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
   document.getElementById('modalLogH').value = '';
   document.getElementById('modalLogM').value = '';
 
+  document.getElementById('modalRepsWarn').style.display = 'none';
   document.getElementById('workoutModal').classList.add('open');
   setTimeout(() => {
     const first = _modalType === 'reps'
@@ -2476,12 +2510,35 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
 
 function closeWorkoutModal(save) {
   document.getElementById('workoutModal').classList.remove('open');
+  document.getElementById('modalRepsWarn').style.display = 'none';
   if (!_pendingModalCallback) return;
+
+  // X button / backdrop → cancelled: don't log anything, just restore state
+  if (save === 'cancel') {
+    const cb = _pendingModalCallback;
+    _pendingModalCallback = null;
+    _pendingModalEx = null;
+    _modalQueueMode = null;
+    cb(null, null, false, true); // cancelled=true
+    return;
+  }
+
   let detail = null;
   let loggedAt = null;
   let shouldRemoveFromQueue = true; // default: remove (normal done flow)
 
   if (save) {
+    const repsRaw = document.getElementById('modalReps').value.trim();
+    // Validate reps is a plain integer when in reps mode
+    if (_modalType === 'reps' && repsRaw) {
+      if (!/^\d+$/.test(repsRaw)) {
+        document.getElementById('modalRepsWarn').style.display = '';
+        document.getElementById('workoutModal').classList.add('open');
+        document.getElementById('modalReps').focus();
+        return; // block save
+      }
+    }
+
     const sets = parseInt(document.getElementById('modalSets').value) || 1;
     const weight = parseFloat(document.getElementById('modalWeight').value) || 0;
 
@@ -2492,8 +2549,7 @@ function closeWorkoutModal(save) {
       const duration_seconds = h * 3600 + m * 60 + s;
       detail = { duration_seconds: duration_seconds || null, sets, weight };
     } else {
-      const reps = document.getElementById('modalReps').value.trim();
-      detail = { reps: reps || null, sets, weight };
+      detail = { reps: repsRaw || null, sets, weight };
     }
 
     const lh = parseInt(document.getElementById('modalLogH').value);
@@ -2504,10 +2560,8 @@ function closeWorkoutModal(save) {
     }
 
     if (_modalQueueMode === 'done') {
-      // Checkbox = "Keep in queue". Checked → don't remove. Unchecked → remove (default).
       shouldRemoveFromQueue = !document.getElementById('modalQueueRemove').checked;
     } else if (_modalQueueMode === 'manual') {
-      // Checkbox = "Remove from queue". Checked → remove (default). Unchecked → keep.
       shouldRemoveFromQueue = document.getElementById('modalQueueRemove').checked;
     } else {
       shouldRemoveFromQueue = false;
@@ -2518,7 +2572,7 @@ function closeWorkoutModal(save) {
   _pendingModalCallback = null;
   _pendingModalEx = null;
   _modalQueueMode = null;
-  cb(detail, loggedAt, shouldRemoveFromQueue);
+  cb(detail, loggedAt, shouldRemoveFromQueue, false); // cancelled=false
 }
 
 
@@ -2857,7 +2911,8 @@ function logCustomActivity() {
   const ex = { name, category: cat, note: '' };
   closeManualLog();
   setTimeout(() => {
-    openWorkoutModal(ex, (detail, loggedAt) => {
+    openWorkoutModal(ex, (detail, loggedAt, _q, cancelled) => {
+      if (cancelled) return;
       addToLog(ex, 'manual', detail, loggedAt);
       notify(`✓ Logged — ${name}`);
     });
@@ -2902,7 +2957,8 @@ function selectManualExercise(name) {
   const isInQueue = queue.slice(currentIdx).some(q => q.name === name);
   closeManualLog();
   setTimeout(() => {
-    openWorkoutModal(ex, (detail, loggedAt, shouldRemoveFromQueue) => {
+    openWorkoutModal(ex, (detail, loggedAt, shouldRemoveFromQueue, cancelled) => {
+      if (cancelled) return;
       addToLog(ex, 'manual', detail, loggedAt);
       if (isInQueue && shouldRemoveFromQueue) removeFromQueue(ex.name);
       notify(`✓ Logged — ${ex.name}`);
@@ -3102,15 +3158,26 @@ function bindStaticButtons() {
   document.querySelector('.editor-add-btn[data-action="logCustom"]')?.addEventListener('click', logCustomActivity);
 
   document.querySelector('#historyModal .btn-modal-close')?.addEventListener('click', closeHistory);
-  document.querySelector('#workoutModal .btn-modal-close')?.addEventListener('click', () => closeWorkoutModal(false));
+  document.querySelector('#workoutModal .btn-modal-close')?.addEventListener('click', () => closeWorkoutModal('cancel'));
   document.querySelector('#manualLogModal .btn-modal-close')?.addEventListener('click', closeManualLog);
 
   $('historyModal')   ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeHistory(); });
-  $('workoutModal')   ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeWorkoutModal(false); });
+  $('workoutModal')   ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeWorkoutModal('cancel'); });
   $('manualLogModal') ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeManualLog(); });
 
   $('modalTypeReps')    ?.addEventListener('click', () => setModalType('reps'));
-  $('modalTypeDuration')?.addEventListener('click', () => setModalType('duration'));
+  $('modalTypeDuration')?.addEventListener('click', () => { setModalType('duration'); document.getElementById('modalRepsWarn').style.display = 'none'; });
+
+  // Live reps validation — warn if value looks like a duration not an integer
+  $('modalReps')?.addEventListener('input', () => {
+    const val = document.getElementById('modalReps').value.trim();
+    const warn = document.getElementById('modalRepsWarn');
+    if (val && !/^\d+$/.test(val)) {
+      warn.style.display = '';
+    } else {
+      warn.style.display = 'none';
+    }
+  });
 
   $('tabFromList')?.addEventListener('click', () => switchPickerTab('list'));
   $('tabCustom')  ?.addEventListener('click', () => switchPickerTab('custom'));
