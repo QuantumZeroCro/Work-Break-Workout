@@ -754,6 +754,39 @@
   .record-badge-reps { background: rgba(59,130,246,0.15); color: #60a5fa; }
   .record-badge-dur  { background: rgba(16,185,129,0.15); color: #34d399; }
   .record-badge-wt   { background: rgba(245,158,11,0.15);  color: #fbbf24; }
+  .record-edit-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-dim); font-size: 13px; padding: 2px 4px;
+    opacity: 0.45; border-radius: 4px; flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .record-edit-btn:hover { opacity: 1; }
+  .record-edit-form {
+    display: none;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 2px 0 8px;
+    gap: 8px;
+    flex-direction: column;
+  }
+  .record-edit-form.open { display: flex; }
+  .record-edit-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .record-edit-row label { font-size: 11px; color: var(--text-dim); min-width: 44px; }
+  .record-edit-row input {
+    background: var(--surface); border: 1px solid var(--surface2);
+    border-radius: 5px; color: var(--text); font-size: 13px;
+    padding: 4px 7px; width: 72px;
+  }
+  .record-edit-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 2px; }
+  .record-edit-save {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 6px; padding: 5px 14px; font-size: 12px; cursor: pointer;
+  }
+  .record-edit-cancel {
+    background: none; border: 1px solid var(--surface2); color: var(--text-dim);
+    border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+  }
 
   /* ── Auth screen ── */
   #authScreen {
@@ -1003,7 +1036,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.37</div>
+    <div class="app-version">v0.38</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -2655,20 +2688,17 @@ async function loadRecordsFromDB() {
   if (!currentUser) { list.innerHTML = '<div class="history-empty">Sign in to see records</div>'; return; }
 
   try {
-    // Fetch all logged entries with reps or duration (how = done or manual, not skip)
     const { data, error } = await sb.from('workout_log')
       .select('exercise_name, category, reps, sets, weight, duration_seconds')
       .eq('user_id', currentUser.id)
       .neq('how', 'skip');
     if (error || !data) throw error;
 
-    // Aggregate client-side: best reps, best duration, best weight per exercise
     const records = {};
     data.forEach(r => {
       const name = r.exercise_name;
       if (!records[name]) records[name] = { category: r.category, bestReps: null, bestDur: null, bestWeight: null };
       const rec = records[name];
-
       const reps = parseInt(r.reps);
       if (!isNaN(reps) && reps > 0) {
         if (rec.bestReps === null || reps > rec.bestReps) rec.bestReps = reps;
@@ -2683,7 +2713,6 @@ async function loadRecordsFromDB() {
       }
     });
 
-    // Filter to only exercises that have at least one record
     const entries = Object.entries(records).filter(([, r]) =>
       r.bestReps !== null || r.bestDur !== null
     );
@@ -2693,7 +2722,6 @@ async function loadRecordsFromDB() {
       return;
     }
 
-    // Sort by BUCKET_ORDER category then name
     entries.sort(([nameA, recA], [nameB, recB]) => {
       const ci = (BUCKET_ORDER.indexOf(recA.category) + 99) % 99 - (BUCKET_ORDER.indexOf(recB.category) + 99) % 99;
       return ci !== 0 ? ci : nameA.localeCompare(nameB);
@@ -2705,7 +2733,7 @@ async function loadRecordsFromDB() {
     }
 
     let lastCat = null;
-    list.innerHTML = entries.map(([name, rec]) => {
+    list.innerHTML = entries.map(([name, rec], i) => {
       const color = CATEGORY_COLORS[rec.category] || '#60a5fa';
       let header = '';
       if (rec.category !== lastCat) {
@@ -2713,18 +2741,101 @@ async function loadRecordsFromDB() {
         header = `<div class="records-cat-header" style="color:${color}">${rec.category}</div>`;
       }
       const badges = [
-        rec.bestReps !== null ? `<span class="record-badge record-badge-reps">🏆 ${rec.bestReps} reps</span>` : '',
-        rec.bestDur  !== null ? `<span class="record-badge record-badge-dur">⏱ ${fmtDur(rec.bestDur)}</span>` : '',
-        rec.bestWeight !== null ? `<span class="record-badge record-badge-wt">⚖ ${rec.bestWeight}kg</span>` : '',
+        rec.bestReps    !== null ? `<span class="record-badge record-badge-reps">🏆 ${rec.bestReps} reps</span>` : '',
+        rec.bestDur     !== null ? `<span class="record-badge record-badge-dur">⏱ ${fmtDur(rec.bestDur)}</span>` : '',
+        rec.bestWeight  !== null ? `<span class="record-badge record-badge-wt">⚖ ${rec.bestWeight}kg</span>` : '',
       ].filter(Boolean).join('');
-      return `${header}<div class="records-row">
-        <span class="records-name">${name}</span>
-        <div class="records-badges">${badges}</div>
-      </div>`;
+
+      // Duration fields for edit form
+      const durH = rec.bestDur !== null ? Math.floor(rec.bestDur / 3600) : '';
+      const durM = rec.bestDur !== null ? Math.floor((rec.bestDur % 3600) / 60) : '';
+      const durS = rec.bestDur !== null ? rec.bestDur % 60 : '';
+
+      return `${header}
+        <div class="records-row" id="rec-row-${i}">
+          <span class="records-name">${name}</span>
+          <div class="records-badges">${badges}</div>
+          <button class="record-edit-btn" title="Edit record" onclick="toggleRecordEdit(${i})">✏️</button>
+        </div>
+        <div class="record-edit-form" id="rec-form-${i}" data-name="${name.replace(/"/g,'&quot;')}" data-cat="${rec.category}">
+          ${rec.bestReps !== null ? `<div class="record-edit-row">
+            <label>Reps</label>
+            <input type="number" id="rec-reps-${i}" value="${rec.bestReps}" min="1" placeholder="reps" />
+          </div>` : ''}
+          ${rec.bestDur !== null ? `<div class="record-edit-row">
+            <label>Duration</label>
+            <input type="number" id="rec-dur-h-${i}" value="${durH}" min="0" max="23" placeholder="h" style="width:48px" />
+            <span style="color:var(--text-dim)">h</span>
+            <input type="number" id="rec-dur-m-${i}" value="${durM}" min="0" max="59" placeholder="m" style="width:48px" />
+            <span style="color:var(--text-dim)">m</span>
+            <input type="number" id="rec-dur-s-${i}" value="${durS}" min="0" max="59" placeholder="s" style="width:48px" />
+            <span style="color:var(--text-dim)">s</span>
+          </div>` : ''}
+          ${rec.bestWeight !== null ? `<div class="record-edit-row">
+            <label>Weight</label>
+            <input type="number" id="rec-wt-${i}" value="${rec.bestWeight}" min="0" step="0.5" placeholder="kg" />
+            <span style="color:var(--text-dim)">kg</span>
+          </div>` : ''}
+          <div class="record-edit-actions">
+            <button class="record-edit-cancel" onclick="toggleRecordEdit(${i})">Cancel</button>
+            <button class="record-edit-save" onclick="saveRecordEdit(${i})">Save</button>
+          </div>
+        </div>`;
     }).join('');
   } catch(e) {
     console.error('records error:', e);
     list.innerHTML = '<div class="history-empty">Failed to load records</div>';
+  }
+}
+
+function toggleRecordEdit(i) {
+  const form = document.getElementById(`rec-form-${i}`);
+  form.classList.toggle('open');
+}
+
+async function saveRecordEdit(i) {
+  const form = document.getElementById(`rec-form-${i}`);
+  const name = form.dataset.name;
+  const cat  = form.dataset.cat;
+
+  const repsEl = document.getElementById(`rec-reps-${i}`);
+  const wtEl   = document.getElementById(`rec-wt-${i}`);
+  const durHEl = document.getElementById(`rec-dur-h-${i}`);
+  const durMEl = document.getElementById(`rec-dur-m-${i}`);
+  const durSEl = document.getElementById(`rec-dur-s-${i}`);
+
+  const reps   = repsEl  ? (parseInt(repsEl.value)  || null) : null;
+  const weight = wtEl    ? (parseFloat(wtEl.value)  || null) : null;
+  const durSec = durHEl
+    ? ((parseInt(durHEl.value)||0)*3600 + (parseInt(durMEl.value)||0)*60 + (parseInt(durSEl.value)||0)) || null
+    : null;
+
+  const btn = form.querySelector('.record-edit-save');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  try {
+    const { error } = await sb.from('workout_log').insert({
+      user_id:          currentUser.id,
+      exercise_name:    name,
+      category:         cat,
+      how:              'manual',
+      reps:             reps ? String(reps) : null,
+      sets:             1,
+      weight:           weight,
+      duration_seconds: durSec,
+      logged_at:        new Date().toISOString(),
+    });
+    if (error) throw error;
+
+    // Update local cache
+    updateRecordCache(name, { reps: reps ? String(reps) : null, weight, duration_seconds: durSec });
+
+    form.classList.remove('open');
+    loadRecordsFromDB(); // refresh the list
+  } catch(e) {
+    console.error('save record error:', e);
+    btn.textContent = 'Save'; btn.disabled = false;
+    alert('Failed to save — check console for details.');
   }
 }
 
