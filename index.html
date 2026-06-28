@@ -1047,7 +1047,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.40</div>
+    <div class="app-version">v0.41</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -2838,7 +2838,6 @@ async function saveRecordEdit(i) {
 
   errEl.style.display = 'none';
 
-  // Which tab is active?
   const repsVisible = document.getElementById(`rec-reps-wrap-${i}`).style.display !== 'none';
 
   let reps = null, durSec = null;
@@ -2858,28 +2857,23 @@ async function saveRecordEdit(i) {
   saveBtn.textContent = 'Saving…'; saveBtn.disabled = true;
 
   try {
-    // Step 1: delete all existing rows for this exercise where the relevant
-    // field is set — so our new value becomes the definitive record, not just
-    // the max of old+new (which would ignore corrections downward).
+    // Delete all rows for this exercise that have a value in the relevant field
     let deleteQuery = sb.from('workout_log')
       .delete()
       .eq('user_id', currentUser.id)
       .eq('exercise_name', name);
 
     if (repsVisible) {
-      // Delete rows that have a reps value (not null / empty)
       deleteQuery = deleteQuery.not('reps', 'is', null).neq('reps', '');
     } else {
-      // Delete rows that have a duration value
       deleteQuery = deleteQuery.not('duration_seconds', 'is', null).gt('duration_seconds', 0);
     }
 
-    const { error: delErr } = await deleteQuery;
+    const { error: delErr, count } = await deleteQuery;
+    console.log('[record edit] deleted rows:', count, delErr);
     if (delErr) throw delErr;
 
-    // Step 2: insert the corrected record.
-    // Use a far-past logged_at so it never appears in today's daily log
-    // (the daily log query filters .gte(today)).
+    // Insert corrected value with epoch timestamp so daily log never shows it
     const { error: insErr } = await sb.from('workout_log').insert({
       user_id:          currentUser.id,
       exercise_name:    name,
@@ -2891,17 +2885,23 @@ async function saveRecordEdit(i) {
       duration_seconds: durSec,
       logged_at:        '1970-01-01T00:00:00.000Z',
     });
+    console.log('[record edit] insert error:', insErr);
     if (insErr) throw insErr;
 
-    // Update in-memory record cache
-    updateRecordCache(name, {
-      reps: reps ? String(reps) : null,
-      weight,
-      duration_seconds: durSec
-    });
+    // Force-reset the personalRecords cache entry so the exercise card badge
+    // reflects the new value immediately (updateRecordCache only goes upward,
+    // so we wipe and rebuild from the new correct values)
+    if (personalRecords[name]) {
+      personalRecords[name] = {
+        bestReps:   repsVisible ? (reps || 0) : personalRecords[name].bestReps,
+        bestDur:    !repsVisible ? (durSec || 0) : personalRecords[name].bestDur,
+        bestWeight: weight || personalRecords[name].bestWeight,
+      };
+    }
 
     form.classList.remove('open');
-    loadRecordsFromDB();
+    await loadRecordsFromDB();
+    saveBtn.textContent = 'Save'; saveBtn.disabled = false;
   } catch(e) {
     console.error('saveRecordEdit error:', e);
     showRecErr(i, e?.message || 'Save failed — check console.');
@@ -2927,7 +2927,9 @@ async function renderHistory() {
         .select('*')
         .eq('user_id', currentUser.id)
         .order('logged_at', { ascending: false });
-      if (data) allEntries = data.map(r => ({
+      if (data) allEntries = data
+        .filter(r => new Date(r.logged_at).getFullYear() > 1970) // exclude record-correction sentinel rows
+        .map(r => ({
         id: r.id,
         name: r.exercise_name,
         category: r.category,
