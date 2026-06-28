@@ -1047,7 +1047,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.43</div>
+    <div class="app-version">v0.44</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1182,8 +1182,10 @@
   <div class="modal modal-history">
     <div class="modal-header">
       <h3>Personal Records</h3>
-      <button class="btn-ghost" style="font-size:12px;padding:4px 10px;" onclick="openRecordPicker()">+ Add</button>
-      <button class="btn-modal-close" aria-label="Close records" data-action="closeRecords">×</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn-ghost" style="font-size:12px;padding:4px 10px;" onclick="openRecordPicker()">+ Add</button>
+        <button class="btn-modal-close" aria-label="Close records" data-action="closeRecords">×</button>
+      </div>
     </div>
     <div id="recordsLoading" style="display:none" class="history-empty">Loading…</div>
     <div class="history-list" id="recordsList"></div>
