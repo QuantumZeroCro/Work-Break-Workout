@@ -67,6 +67,19 @@
     height: var(--ring-size);
     flex-shrink: 0;
   }
+  .ring-container.ring-clickable {
+    cursor: pointer;
+  }
+  .ring-container.ring-clickable:hover .ring-progress {
+    filter: brightness(1.2);
+  }
+  .ring-container.ring-clickable:hover .ring-time {
+    opacity: 0.85;
+  }
+  .ring-container.ring-clickable:active {
+    transform: scale(0.97);
+    transition: transform 0.1s;
+  }
   .ring-svg {
     width: 100%; height: 100%;
     transform: rotate(-90deg);
@@ -990,20 +1003,20 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.35</div>
+    <div class="app-version">v0.36</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
 
 <!-- Ring timer -->
-<div class="ring-container">
+<div class="ring-container" id="ringContainer">
   <svg class="ring-svg" viewBox="0 0 260 260">
     <circle class="ring-track" cx="130" cy="130" r="118"/>
     <circle class="ring-progress" id="ringProgress" cx="130" cy="130" r="118"/>
   </svg>
   <div class="ring-inner">
     <span class="ring-label" id="ringLabel">ready to go</span>
-    <span class="ring-time" id="ringTime">30:00</span>
+    <span class="ring-time" id="ringTime">START</span>
     <span class="ring-sublabel" id="ringSubLabel">press start</span>
   </div>
 </div>
@@ -1849,14 +1862,13 @@ function renderLogDays() {
   const keys = getAllDayKeys();
   if (!keys.includes(TODAY_KEY)) keys.unshift(TODAY_KEY);
   const container = document.getElementById('logDays');
-  // Filter out days (other than today) with no logged exercises
+  // Hide days (other than today) with no logged (non-skip) exercises
   const visibleKeys = keys.filter(key => {
-    if (key === TODAY_KEY) return true; // always show today
+    if (key === TODAY_KEY) return true;
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return false;
-      const count = (JSON.parse(raw).log || []).filter(e => e.how !== 'skip').length;
-      return count > 0;
+      return (JSON.parse(raw).log || []).some(e => e.how !== 'skip');
     } catch(e) { return false; }
   });
   if (visibleKeys.length <= 1) { container.innerHTML = ''; return; }
@@ -2005,6 +2017,11 @@ async function resetDay() {
   renderQueue();
   updateDayProgress();
   renderLog();
+  // Reset ring to START state
+  document.getElementById('ringTime').textContent = 'START';
+  document.getElementById('ringLabel').textContent = 'ready to go';
+  document.getElementById('ringSubLabel').textContent = 'press start';
+  updateRingClickability();
 
   notify('Day reset ✓');
 }
@@ -2123,6 +2140,7 @@ function startCountdown() {
   clearInterval(timerInterval);
   timerInterval = setInterval(tick, 1000);
   updateRing(totalSeconds, totalSeconds);
+  updateRingClickability();
 }
 
 function showAllDone() {
@@ -2142,6 +2160,7 @@ function showAllDone() {
   document.getElementById('exNote').textContent = "You've completed every exercise for today. See you tomorrow.";
   document.getElementById('exCategory').textContent = 'Complete';
   document.getElementById('queueList').innerHTML = '<div class="queue-item done-state">Nothing left for today ✓</div>';
+  updateRingClickability();
 }
 
 function startSession() {
@@ -2267,6 +2286,7 @@ function triggerExercise() {
   document.getElementById('exerciseCard').classList.add('active');
   document.getElementById('btnDone').disabled = false;
   document.getElementById('btnSkip').disabled = false;
+  updateRingClickability();
 }
 
 function skipExercise() {
@@ -2354,6 +2374,22 @@ function updateInterval(val) {
 
 function toggleSettings() {
   document.getElementById('settingsPanel').classList.toggle('open');
+}
+
+function updateRingClickability() {
+  const container = document.getElementById('ringContainer');
+  if (!container) return;
+  const allDone = document.getElementById('ringTime')?.textContent === '🎉';
+  if (allDone) {
+    container.classList.remove('ring-clickable');
+    container.title = '';
+  } else if (!sessionActive) {
+    container.classList.add('ring-clickable');
+    container.title = 'Click to start session';
+  } else {
+    container.classList.add('ring-clickable');
+    container.title = exerciseTriggered ? 'Click to mark as done' : 'Click to mark as done';
+  }
 }
 
 function notify(msg) {
@@ -2972,10 +3008,11 @@ async function initApp() {
   rp.style.strokeDasharray = CIRCUMFERENCE;
   rp.style.strokeDashoffset = 0;
   requestAnimationFrame(() => { rp.style.transition = ''; });
-  // Before session starts, show START (not 30:00) since first exercise fires immediately on Start
+  // Before session starts, show START (not a countdown) since first exercise fires immediately
   document.getElementById('ringTime').textContent = 'START';
   document.getElementById('ringLabel').textContent = 'ready to go';
   document.getElementById('ringSubLabel').textContent = 'press start';
+  updateRingClickability();
 
   document.getElementById('modalSaveBtn').addEventListener('click', () => closeWorkoutModal(true));
   document.getElementById('modalSkipBtn').addEventListener('click', () => closeWorkoutModal(false));
@@ -3028,6 +3065,25 @@ function bindStaticButtons() {
 
   $('btnStart')       ?.addEventListener('click', startSession);
   $('btnDone')        ?.addEventListener('click', doneExercise);
+  $('btnSkip')        ?.addEventListener('click', skipExercise);
+  $('btnResetTrigger')?.addEventListener('click', showResetConfirm);
+  $('btnClearLog')    ?.addEventListener('click', showClearLogConfirm);
+
+  // Ring click — context-sensitive shortcut
+  $('ringContainer')?.addEventListener('click', () => {
+    const allDone = $('ringTime')?.textContent === '🎉';
+    if (allDone) return; // nothing to do on celebration screen
+    if (!sessionActive) {
+      // Pre-session (START) or Restart day?
+      startSession();
+    } else if (exerciseTriggered) {
+      // GO! state — act as Done
+      doneExercise();
+    } else {
+      // Counting down — act as Done (log exercise early)
+      doneExercise();
+    }
+  });
   $('btnSkip')        ?.addEventListener('click', skipExercise);
   $('btnResetTrigger')?.addEventListener('click', showResetConfirm);
   $('btnClearLog')    ?.addEventListener('click', showClearLogConfirm);
