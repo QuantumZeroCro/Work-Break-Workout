@@ -1049,7 +1049,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.49</div>
+    <div class="app-version">v0.50</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -2067,8 +2067,8 @@ function renderLogForKey(key) {
     }
     const skipTag = skipped ? '<span class="tag-badge">skipped</span>' : '';
     const manualTag = isManual ? '<span class="tag-badge">manual</span>' : '';
-    const editBtn = isToday && !skipped ? `<button class="log-again" data-idx="${idx}" onclick="editLogEntry(${idx})">edit</button>` : '';
-    const delBtn = isToday ? `<button class="log-del" onclick="deleteLogEntry(${idx})" title="Delete">×</button>` : '';
+    const editBtn = !skipped ? `<button class="log-again" onclick="editLogEntryForKey('${key}', ${idx})">edit</button>` : '';
+    const delBtn = `<button class="log-del" onclick="deleteLogEntryForKey('${key}', ${idx})" title="Delete">×</button>`;
 
     return `<div class="log-item">
       <div class="log-item-left">
@@ -2232,6 +2232,63 @@ async function deleteLogEntry(idx) {
   document.getElementById('statDone').textContent = streak;
   saveState();
   renderLog();
+}
+
+async function deleteLogEntryForKey(key, idx) {
+  if (key === TODAY_KEY) { deleteLogEntry(idx); return; }
+
+  // Past day — load from localStorage
+  let parsed;
+  try { parsed = JSON.parse(localStorage.getItem(key) || '{}'); } catch(e) { return; }
+  const log = parsed.log || [];
+  const entry = log[idx];
+  if (!entry) return;
+
+  // Delete from Supabase if we have an id
+  if (currentUser && entry.id) {
+    try {
+      await sb.from('workout_log').delete()
+        .eq('id', entry.id).eq('user_id', currentUser.id);
+    } catch(e) { console.error('deleteLogEntryForKey error:', e); }
+  }
+
+  log.splice(idx, 1);
+  parsed.log = log;
+  localStorage.setItem(key, JSON.stringify(parsed));
+  renderLog();
+}
+
+function editLogEntryForKey(key, idx) {
+  if (key === TODAY_KEY) { editLogEntry(idx); return; }
+
+  // Past day — load from localStorage
+  let parsed;
+  try { parsed = JSON.parse(localStorage.getItem(key) || '{}'); } catch(e) { return; }
+  const log = parsed.log || [];
+  const entry = log[idx];
+  if (!entry) return;
+
+  const ex = { name: entry.name, category: entry.category, note: '' };
+  openWorkoutModal(ex, async (detail) => {
+    if (!detail) return;
+    entry.detail = detail;
+    parsed.log = log;
+    localStorage.setItem(key, JSON.stringify(parsed));
+
+    if (currentUser && entry.id) {
+      try {
+        await sb.from('workout_log').update({
+          reps: detail.reps || null,
+          sets: detail.sets || null,
+          weight: detail.weight || null,
+          duration_seconds: detail.duration_seconds || null,
+        }).eq('id', entry.id).eq('user_id', currentUser.id);
+      } catch(e) { console.error('editLogEntryForKey save error:', e); }
+    }
+
+    notify(`✓ Updated — ${entry.name}`);
+    renderLog();
+  }, entry.detail);
 }
 
 function doneExercise() {
