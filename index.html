@@ -21,6 +21,7 @@
     --accent: #3b82f6;
     --accent2: #60a5fa;
     --text: #f0f2f5;
+    --text-dim: #9ca3af;
     --muted: #6b7280;
     --success: #10b981;
     --warn: #f59e0b;
@@ -1049,7 +1050,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.50</div>
+    <div class="app-version">v0.51</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1580,7 +1581,7 @@ async function loadHistoryFromDB() {
   if (!currentUser) return;
   try {
     const { data, error } = await sb.from('workout_log')
-      .select('logged_at, exercise_name, category, how, reps, sets, weight, duration_seconds')
+      .select('id, logged_at, exercise_name, category, how, reps, sets, weight, duration_seconds')
       .eq('user_id', currentUser.id)
       .neq('how', 'record')
       .order('logged_at', { ascending: false });
@@ -1592,10 +1593,12 @@ async function loadHistoryFromDB() {
       const key = 'wbw_' + (d.getFullYear() * 10000 + (d.getMonth()+1) * 100 + d.getDate());
       if (!byDay[key]) byDay[key] = [];
       byDay[key].push({
+        id: r.id,
         name: r.exercise_name,
         category: r.category,
         time: d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
         how: r.how,
+        loggedAt: r.logged_at,
         detail: (r.reps || r.sets || r.weight || r.duration_seconds)
           ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
           : null
@@ -2235,7 +2238,11 @@ async function deleteLogEntry(idx) {
 }
 
 async function deleteLogEntryForKey(key, idx) {
-  if (key === TODAY_KEY) { deleteLogEntry(idx); return; }
+  if (key === TODAY_KEY) {
+    // deleteLogEntry uses positional idx which is fine for the in-page log (never from DB grouping)
+    deleteLogEntry(idx);
+    return;
+  }
 
   // Past day — load from localStorage
   let parsed;
@@ -2497,11 +2504,14 @@ function scheduleMidnightReset() {
     currentIdx = 0;
     skippedToday = new Set();
     document.getElementById('statDone').textContent = 0;
+    saveState();
     rebuildQueue();
+    syncQueueWithLog();
     updateExerciseDisplay();
     renderQueue();
     renderLog();
     updateDayProgress();
+    subscribeRealtime();
     startCountdown();
     scheduleMidnightReset(); // schedule next day
   }, msUntilMidnight);
@@ -2556,6 +2566,8 @@ function skipExercise() {
   updateExerciseDisplay();
   renderQueue();
 
+  // Reset flag so triggerExercise() doesn't bail out if we were in GO! state
+  exerciseTriggered = false;
   // Immediately show the next exercise — skip doesn't consume timer time
   triggerExercise();
 }
@@ -2831,6 +2843,11 @@ function addExercise() {
   const cat = document.getElementById('newExCat').value;
   const note = document.getElementById('newExNote').value.trim() || '—';
   if (!name) { document.getElementById('newExName').focus(); return; }
+  if (EXERCISES.some(e => e.name.toLowerCase() === name.toLowerCase())) {
+    notify(`⚠ "${name}" already exists`);
+    document.getElementById('newExName').focus();
+    return;
+  }
   EXERCISES.push({ name, category: cat, note });
   saveExercises();
   document.getElementById('newExName').value = '';
@@ -3289,8 +3306,17 @@ async function deleteHistoryEntry(btn) {
 
   // If today, also remove from dailyLog
   if (parseInt(dayKey) === getTodaySeed()) {
-    if (idx >= 0 && idx < dailyLog.length) {
-      dailyLog.splice(idx, 1);
+    // When entries come from DB, `idx` is the position within renderHistory's grouped array
+    // which may not match dailyLog order. Match by dbId first, fall back to idx.
+    let spliceIdx = -1;
+    if (dbId) {
+      spliceIdx = dailyLog.findIndex(e => String(e.id) === String(dbId));
+    }
+    if (spliceIdx === -1 && idx >= 0 && idx < dailyLog.length) {
+      spliceIdx = idx;
+    }
+    if (spliceIdx !== -1) {
+      dailyLog.splice(spliceIdx, 1);
       streak = dailyLog.filter(e => e.how !== 'skip').length;
       document.getElementById('statDone').textContent = streak;
       saveState();
@@ -3325,7 +3351,9 @@ async function editHistoryEntry(btn) {
   // Find the entry — from dailyLog if today, else from DB/localStorage
   let entry = null;
   if (isToday) {
-    entry = dailyLog[idx];
+    // Match by dbId first (DB entries), fall back to positional idx (offline entries)
+    if (dbId) entry = dailyLog.find(e => String(e.id) === String(dbId)) || null;
+    if (!entry && idx >= 0 && idx < dailyLog.length) entry = dailyLog[idx];
   } else if (currentUser && dbId) {
     try {
       const { data } = await sb.from('workout_log')
@@ -3369,12 +3397,12 @@ async function editHistoryEntry(btn) {
       } catch(e) { console.error('editHistoryEntry save error:', e); }
     }
 
-    // Update today's in-memory log
-    if (isToday && dailyLog[idx]) {
-      dailyLog[idx].detail = detail;
+    // Update today's in-memory log — mutate the entry object directly (already a reference)
+    if (isToday && entry) {
+      entry.detail = detail;
       if (loggedAt) {
-        dailyLog[idx].time = loggedAt.getHours().toString().padStart(2,'0') + ':' + loggedAt.getMinutes().toString().padStart(2,'0');
-        dailyLog[idx].loggedAt = loggedAt.toISOString();
+        entry.time = loggedAt.getHours().toString().padStart(2,'0') + ':' + loggedAt.getMinutes().toString().padStart(2,'0');
+        entry.loggedAt = loggedAt.toISOString();
       }
       saveState();
       renderLog();
