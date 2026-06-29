@@ -34,6 +34,7 @@
     --accent: #3b82f6;
     --accent2: #60a5fa;
     --text: #f0f2f5;
+    --text-dim: #9ca3af;
     --muted: #6b7280;
     --success: #10b981;
     --warn: #f59e0b;
@@ -1062,7 +1063,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.52</div>
+    <div class="app-version">v0.53</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1117,12 +1118,12 @@
   <h3>Settings</h3>
   <div class="setting-row">
     <label>Break interval</label>
-    <input type="range" id="intervalSlider" min="10" max="60" value="30" step="5" oninput="updateInterval(this.value)">
+    <input type="range" id="intervalSlider" min="10" max="60" value="30" step="5">
     <span id="intervalVal">30 min</span>
   </div>
   <div class="setting-row">
     <label>Shuffle exercises</label>
-    <input type="checkbox" id="shuffleCheck" checked onchange="rebuildQueue();saveState()">
+    <input type="checkbox" id="shuffleCheck" checked>
   </div>
   <div class="setting-row">
     <label class="label-danger">Reset today</label>
@@ -1142,8 +1143,8 @@
   <div class="reset-confirm" id="resetRecordsConfirm">
     <div class="reset-confirm-msg">This will permanently delete all your personal records. This cannot be undone.</div>
     <div class="reset-confirm-btns">
-      <button class="btn-cancel-small" onclick="hideResetRecordsConfirm()">Cancel</button>
-      <button class="btn-danger" onclick="confirmResetRecords()">Yes, reset records</button>
+      <button class="btn-cancel-small" data-action="hideResetRecords">Cancel</button>
+      <button class="btn-danger" data-action="confirmResetRecords">Yes, reset records</button>
     </div>
   </div>
 </div>
@@ -2224,12 +2225,17 @@ async function deleteLogEntry(idx) {
           .eq('id', entry.id)
           .eq('user_id', currentUser.id);
       } else {
-        // Fallback: match by name + time window (±1 min) for entries without a stored id
-        const loggedAt = new Date();
-        const [h, m] = entry.time.split(':');
-        loggedAt.setHours(parseInt(h), parseInt(m), 0, 0);
-        const from = new Date(loggedAt.getTime() - 60000).toISOString();
-        const to   = new Date(loggedAt.getTime() + 60000).toISOString();
+        // Fallback: match by name + time window (±1 min) for entries without a stored id.
+        // Use the stored loggedAt timestamp (ISO string) so the correct day is targeted,
+        // rather than constructing a new Date() from only the HH:MM display string.
+        const base = entry.loggedAt ? new Date(entry.loggedAt) : (() => {
+          const d = new Date();
+          const [h, m] = entry.time.split(':');
+          d.setHours(parseInt(h), parseInt(m), 0, 0);
+          return d;
+        })();
+        const from = new Date(base.getTime() - 60000).toISOString();
+        const to   = new Date(base.getTime() + 60000).toISOString();
         await sb.from('workout_log')
           .delete()
           .eq('user_id', currentUser.id)
@@ -2452,8 +2458,12 @@ function subscribeRealtime() {
           ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
           : null
       };
-      // Only add if not already in log, and not a record-correction row
-      const alreadyLogged = dailyLog.some(e => e.name === entry.name && e.time === entry.time);
+      // Only add if not already in log, and not a record-correction row.
+      // Primary dedup by DB id; fall back to name+time only for local entries that lack an id.
+      const alreadyLogged = dailyLog.some(e =>
+        (e.id && e.id === entry.id) ||
+        (!e.id && e.name === entry.name && e.time === entry.time)
+      );
       if (!alreadyLogged && r.how !== 'record') {
         dailyLog.unshift(entry);
         streak = dailyLog.filter(e => e.how !== 'skip').length;
@@ -3649,6 +3659,9 @@ async function initApp() {
 function bindStaticButtons() {
   const $ = id => document.getElementById(id);
 
+  $('intervalSlider') ?.addEventListener('input',  e => updateInterval(e.target.value));
+  $('shuffleCheck')   ?.addEventListener('change', () => { rebuildQueue(); saveState(); });
+
   $('btnStart')       ?.addEventListener('click', startSession);
   $('btnDone')        ?.addEventListener('click', doneExercise);
   $('btnSkip')        ?.addEventListener('click', skipExercise);
@@ -3679,6 +3692,8 @@ function bindStaticButtons() {
 
   document.querySelector('.btn-cancel-small[data-action="hideReset"]')?.addEventListener('click', hideResetConfirm);
   document.querySelector('.btn-danger[data-action="confirmReset"]')?.addEventListener('click', confirmReset);
+  document.querySelector('.btn-cancel-small[data-action="hideResetRecords"]')?.addEventListener('click', hideResetRecordsConfirm);
+  document.querySelector('.btn-danger[data-action="confirmResetRecords"]')?.addEventListener('click', confirmResetRecords);
   document.querySelector('.btn-cancel-small[data-action="hideClear"]')?.addEventListener('click', hideClearLogConfirm);
   document.querySelector('.btn-danger[data-action="confirmClear"]')?.addEventListener('click', confirmClearLog);
 
