@@ -1320,11 +1320,11 @@
       <div class="custom-templates">
         <div class="custom-templates-label">Quick pick</div>
         <div class="custom-template-btns">
-          <button class="custom-template-btn">🏐 Volleyball</button>
-          <button class="custom-template-btn">🎾 Padel</button>
-          <button class="custom-template-btn">🏃 Running</button>
-          <button class="custom-template-btn">⚡ Sprint</button>
-          <button class="custom-template-btn">🚴 Cycling</button>
+          <button class="custom-template-btn" data-name="Volleyball" data-cat="Cardio">🏐 Volleyball</button>
+          <button class="custom-template-btn" data-name="Padel" data-cat="Cardio">🎾 Padel</button>
+          <button class="custom-template-btn" data-name="Running" data-cat="Cardio">🏃 Running</button>
+          <button class="custom-template-btn" data-name="Sprint" data-cat="Cardio">⚡ Sprint</button>
+          <button class="custom-template-btn" data-name="Cycling" data-cat="Cardio">🚴 Cycling</button>
         </div>
       </div>
       <div class="picker-custom-fields">
@@ -2183,8 +2183,15 @@ async function clearLog() {
   dailyLog = [];
   skippedToday = new Set();
   streak = 0;
+  currentIdx = 0;
   document.getElementById('statDone').textContent = 0;
   saveState();
+  // Rebuild queue so done/skipped exercises come back
+  rebuildQueue();
+  syncQueueWithLog();
+  updateExerciseDisplay();
+  renderQueue();
+  updateDayProgress();
   renderLog();
 }
 
@@ -2368,7 +2375,10 @@ function subscribeRealtime() {
         category: r.category,
         time: new Date(r.logged_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
         how: r.how,
-        detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null
+        loggedAt: r.logged_at,
+        detail: (r.reps || r.sets || r.weight || r.duration_seconds)
+          ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
+          : null
       };
       // Only add if not already in log, and not a record-correction row
       const alreadyLogged = dailyLog.some(e => e.name === entry.name && e.time === entry.time);
@@ -2522,8 +2532,10 @@ function updateExerciseDisplay() {
 function renderQueue() {
   const list = document.getElementById('queueList');
   list.innerHTML = '';
-  for (let i = 0; i < 4; i++) {
-    const idx = (currentIdx + i) % queue.length;
+  const remaining = queue.length - currentIdx;
+  const count = Math.min(4, remaining);
+  for (let i = 0; i < count; i++) {
+    const idx = currentIdx + i;
     const ex = queue[idx];
     if (!ex) continue;
     const div = document.createElement('div');
@@ -2560,7 +2572,7 @@ function updateRingClickability() {
     container.title = 'Click to start session';
   } else {
     container.classList.add('ring-clickable');
-    container.title = exerciseTriggered ? 'Click to mark as done' : 'Click to mark as done';
+    container.title = exerciseTriggered ? 'Click to mark as done' : 'Click to count down early';
   }
 }
 
@@ -3103,7 +3115,9 @@ async function renderHistory() {
         name: r.exercise_name,
         category: r.category,
         how: r.how,
-        detail: (r.reps || r.sets || r.weight) ? { reps: r.reps, sets: r.sets, weight: r.weight } : null,
+        detail: (r.reps || r.sets || r.weight || r.duration_seconds)
+          ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
+          : null,
         date: new Date(r.logged_at)
       }));
     } catch(e) {}
@@ -3178,10 +3192,12 @@ async function renderHistory() {
       const skipTag = e.how === 'skip' ? '<span class="tag-badge">skipped</span>' : '';
       const entryIdx = entries.indexOf(e);
       const delBtn = `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" onclick="deleteHistoryEntry(this)" title="Delete">×</button>`;
+      const editBtn = e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" onclick="editHistoryEntry(this)">edit</button>` : '';
       return `<div class="history-entry">
         <div class="log-dot history-dot" style="background:${color}"></div>
         <span class="history-entry-name">${e.name}${skipTag}</span>
         ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
+        ${editBtn}
         ${delBtn}
       </div>`;
     }).join('');
@@ -3213,7 +3229,7 @@ async function deleteHistoryEntry(btn) {
   }
 
   // If today, also remove from dailyLog
-  if ('wbw_' + dayKey === TODAY_KEY || dayKey === String(getTodaySeed())) {
+  if (parseInt(dayKey) === getTodaySeed()) {
     if (idx >= 0 && idx < dailyLog.length) {
       dailyLog.splice(idx, 1);
       streak = dailyLog.filter(e => e.how !== 'skip').length;
@@ -3239,6 +3255,89 @@ async function deleteHistoryEntry(btn) {
   entryEl.remove();
   // If that was the last entry for the day, remove the whole day card
   if (dayEl && dayEl.querySelectorAll('.history-entry').length === 0) dayEl.remove();
+}
+
+async function editHistoryEntry(btn) {
+  const dbId = btn.dataset.dbid;
+  const dayKey = btn.dataset.daykey;
+  const idx = parseInt(btn.dataset.idx);
+  const isToday = parseInt(dayKey) === getTodaySeed();
+
+  // Find the entry — from dailyLog if today, else from DB/localStorage
+  let entry = null;
+  if (isToday) {
+    entry = dailyLog[idx];
+  } else if (currentUser && dbId) {
+    try {
+      const { data } = await sb.from('workout_log')
+        .select('*').eq('id', dbId).eq('user_id', currentUser.id).single();
+      if (data) entry = {
+        id: data.id,
+        name: data.exercise_name,
+        category: data.category,
+        how: data.how,
+        detail: (data.reps || data.sets || data.weight || data.duration_seconds)
+          ? { reps: data.reps, sets: data.sets, weight: data.weight, duration_seconds: data.duration_seconds }
+          : null
+      };
+    } catch(e) { console.error('editHistoryEntry fetch error:', e); return; }
+  } else {
+    // localStorage fallback
+    try {
+      const raw = localStorage.getItem('wbw_' + dayKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        entry = parsed.log?.[idx] || null;
+      }
+    } catch(e) {}
+  }
+  if (!entry) return;
+
+  const ex = { name: entry.name, category: entry.category, note: '' };
+  openWorkoutModal(ex, async (detail, loggedAt) => {
+    if (!detail) return;
+
+    // Update in Supabase
+    if (currentUser && dbId) {
+      try {
+        await sb.from('workout_log').update({
+          reps: detail.reps || null,
+          sets: detail.sets || null,
+          weight: detail.weight || null,
+          duration_seconds: detail.duration_seconds || null,
+          ...(loggedAt ? { logged_at: loggedAt.toISOString() } : {})
+        }).eq('id', dbId).eq('user_id', currentUser.id);
+      } catch(e) { console.error('editHistoryEntry save error:', e); }
+    }
+
+    // Update today's in-memory log
+    if (isToday && dailyLog[idx]) {
+      dailyLog[idx].detail = detail;
+      if (loggedAt) {
+        dailyLog[idx].time = loggedAt.getHours().toString().padStart(2,'0') + ':' + loggedAt.getMinutes().toString().padStart(2,'0');
+        dailyLog[idx].loggedAt = loggedAt.toISOString();
+      }
+      saveState();
+      renderLog();
+    } else {
+      // Update localStorage for past days
+      try {
+        const key = 'wbw_' + dayKey;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.log?.[idx]) {
+            parsed.log[idx].detail = detail;
+            localStorage.setItem(key, JSON.stringify(parsed));
+          }
+        }
+      } catch(e) {}
+    }
+
+    notify(`✓ Updated — ${entry.name}`);
+    // Re-render history to reflect new detail string
+    renderHistory();
+  }, entry.detail);
 }
 function openManualLog() {
   switchPickerTab('list');
@@ -3500,10 +3599,6 @@ function bindStaticButtons() {
       doneExercise();
     }
   });
-  $('btnSkip')        ?.addEventListener('click', skipExercise);
-  $('btnResetTrigger')?.addEventListener('click', showResetConfirm);
-  $('btnResetRecordsTrigger') ?.addEventListener('click', showResetRecordsConfirm);
-  $('btnClearLog')    ?.addEventListener('click', showClearLogConfirm);
 
   document.querySelector('[aria-label="Toggle settings"]')?.addEventListener('click', toggleSettings);
   document.querySelector('[aria-label="Edit exercise list"]')?.addEventListener('click', toggleEditor);
