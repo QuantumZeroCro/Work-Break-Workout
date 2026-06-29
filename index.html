@@ -690,7 +690,9 @@
     background: none; border: none; color: var(--muted);
     font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1;
     flex-shrink: 0; transition: color 0.15s; opacity: 0.6;
+    margin-left: auto;
   }
+  .log-del { margin-left: 0; } /* today's log handles its own layout */
   .log-del:hover, .history-del:hover { color: #f43f5e; opacity: 1; }
 
   /* ── History modal ── */
@@ -1047,7 +1049,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.47</div>
+    <div class="app-version">v0.49</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
