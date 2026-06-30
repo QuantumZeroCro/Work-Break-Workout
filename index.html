@@ -6,8 +6,6 @@
 <title>Work Break Workout</title>
   <meta name="description" content="A personal workout timer that prompts exercises throughout your workday, tracks your daily log, and works offline as a single HTML file." />
   <meta name="theme-color" content="#0e0f11" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <!--
   SUPABASE SECURITY STATUS
@@ -564,12 +562,60 @@
   }
   .editor-item-name { flex: 1; color: var(--text); }
   .editor-item-note { font-size: 11px; color: var(--muted); flex: 1; }
+  .editor-btn-edit {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 13px; padding: 2px 5px; border-radius: 4px; line-height: 1;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .editor-btn-edit:hover { color: var(--accent2); }
+  .editor-item-edit-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 8px;
+  }
+  .editor-item-edit-row input, .editor-item-edit-row select {
+    background: var(--surface2);
+    border: 1px solid #2a2d35;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    padding: 7px 9px;
+    outline: none;
+  }
+  .editor-item-edit-row input:focus, .editor-item-edit-row select:focus { border-color: var(--accent); }
+  .editor-item-edit-actions { grid-column: 1 / -1; display: flex; gap: 6px; }
+  .editor-item-edit-actions button {
+    flex: 1;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600; font-size: 12px;
+    padding: 7px; border: none; border-radius: 7px; cursor: pointer;
+  }
+  .editor-item-edit-save { background: var(--accent); color: #fff; }
+  .editor-item-edit-save:hover { background: var(--accent2); }
+  .editor-item-edit-cancel { background: var(--surface2); color: var(--muted); }
+  .editor-item-edit-cancel:hover { color: var(--text); }
   .editor-btn-del {
     background: none; border: none; color: var(--muted); cursor: pointer;
     font-size: 15px; padding: 2px 5px; border-radius: 4px; line-height: 1;
     font-family: 'Space Grotesk', sans-serif;
   }
   .editor-btn-del:hover { color: #f43f5e; }
+  .editor-confirm-del {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: #f43f5e; white-space: nowrap;
+  }
+  .editor-confirm-del button {
+    background: none; border: none; cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif; font-size: 11px;
+    padding: 3px 7px; border-radius: 5px; line-height: 1;
+  }
+  .editor-confirm-del .editor-confirm-yes { background: #f43f5e; color: #fff; }
+  .editor-confirm-del .editor-confirm-no { color: var(--muted); border: 1px solid var(--surface2); }
   .editor-add-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -896,6 +942,37 @@
     padding: 4px;
   }
   #authToggleBtn:hover { color: var(--text); }
+  .auth-link-btn {
+    background: none;
+    border: none;
+    color: var(--accent2);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    margin-top: -6px;
+  }
+  .auth-link-btn:hover { text-decoration: underline; }
+  #recoveryScreen {
+    display: none;
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 32px;
+  }
+  #recoveryScreen h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  #recoveryError {
+    font-size: 12px;
+    color: #f43f5e;
+    display: none;
+  }
 
   /* ── Header sign-out button ── */
   .btn-signout {
@@ -1064,7 +1141,19 @@
     <input id="authEmail" class="auth-input" type="email" name="email" placeholder="Email" autocomplete="email" />
     <input id="authPassword" class="auth-input" type="password" name="password" placeholder="Password" autocomplete="current-password" />
     <button id="authSubmitBtn">Sign in</button>
+    <button id="authForgotBtn" class="auth-link-btn">Forgot password?</button>
     <button id="authToggleBtn">No account? Sign up</button>
+  </div>
+</div>
+
+<!-- Shown after clicking the password-reset link in the confirmation email -->
+<div id="recoveryScreen" style="display:none">
+  <h1>Work Break Workout</h1>
+  <div class="auth-card">
+    <div>Set a new password</div>
+    <div id="recoveryError"></div>
+    <input id="recoveryPassword" class="auth-input" type="password" placeholder="New password" autocomplete="new-password" />
+    <button id="recoverySubmitBtn">Update password</button>
   </div>
 </div>
 
@@ -1074,7 +1163,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.54</div>
+    <div class="app-version">v0.55</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1396,6 +1485,15 @@ async function initAuth() {
     }
 
     sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        // User clicked the reset-password link from their email — Supabase signs them
+        // into a temporary recovery session. Show the "set new password" screen instead
+        // of dropping them straight into the app under the old password.
+        document.getElementById('authScreen').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'none';
+        document.getElementById('recoveryScreen').style.display = 'flex';
+        return;
+      }
       if (session) {
         currentUser = session.user;
         showApp();
@@ -1422,15 +1520,40 @@ function showApp() {
 
 // ── Auth UI ──
 let _appInitialized = false;
-let authMode = 'signin';
+let authMode = 'signin'; // 'signin' | 'signup' | 'reset'
 document.getElementById('btnSignOut').addEventListener('click', () => sb.auth.signOut());
 
-document.getElementById('authToggleBtn').addEventListener('click', () => {
-  authMode = authMode === 'signin' ? 'signup' : 'signin';
-  document.getElementById('authTitle').textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
-  document.getElementById('authSubmitBtn').textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
-  document.getElementById('authToggleBtn').textContent = authMode === 'signin' ? 'No account? Sign up' : 'Already have an account? Sign in';
+function renderAuthMode() {
+  const titleEl = document.getElementById('authTitle');
+  const submitBtn = document.getElementById('authSubmitBtn');
+  const toggleBtn = document.getElementById('authToggleBtn');
+  const forgotBtn = document.getElementById('authForgotBtn');
+  const pwField = document.getElementById('authPassword');
   document.getElementById('authError').style.display = 'none';
+
+  if (authMode === 'reset') {
+    titleEl.textContent = 'Reset password';
+    submitBtn.textContent = 'Send reset link';
+    toggleBtn.textContent = 'Back to sign in';
+    forgotBtn.style.display = 'none';
+    pwField.style.display = 'none';
+  } else {
+    titleEl.textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
+    submitBtn.textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
+    toggleBtn.textContent = authMode === 'signin' ? 'No account? Sign up' : 'Already have an account? Sign in';
+    forgotBtn.style.display = authMode === 'signin' ? '' : 'none';
+    pwField.style.display = '';
+  }
+}
+
+document.getElementById('authToggleBtn').addEventListener('click', () => {
+  authMode = authMode === 'signin' ? 'signup' : 'signin'; // 'reset' also falls through to 'signin' here
+  renderAuthMode();
+});
+
+document.getElementById('authForgotBtn').addEventListener('click', () => {
+  authMode = 'reset';
+  renderAuthMode();
 });
 
 document.getElementById('authSubmitBtn').addEventListener('click', async () => {
@@ -1438,6 +1561,33 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
   const password = document.getElementById('authPassword').value;
   const errEl = document.getElementById('authError');
   errEl.style.display = 'none';
+
+  if (authMode === 'reset') {
+    if (!email) { errEl.style.color = '#f43f5e'; errEl.textContent = 'Please enter your email.'; errEl.style.display = 'block'; return; }
+    const btn = document.getElementById('authSubmitBtn');
+    btn.textContent = '...';
+    btn.disabled = true;
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+      if (error) {
+        errEl.style.color = '#f43f5e';
+        errEl.textContent = error.message;
+      } else {
+        errEl.style.color = '#10b981';
+        errEl.textContent = 'Check your email for a password reset link.';
+      }
+      errEl.style.display = 'block';
+    } catch(e) {
+      console.error('reset password exception:', e);
+      errEl.style.color = '#f43f5e';
+      errEl.textContent = 'Error: ' + e.message;
+      errEl.style.display = 'block';
+    }
+    btn.textContent = 'Send reset link';
+    btn.disabled = false;
+    return;
+  }
+
   if (!email || !password) { errEl.textContent = 'Please enter email and password.'; errEl.style.display = 'block'; return; }
 
   const btn = document.getElementById('authSubmitBtn');
@@ -1469,6 +1619,42 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
   }
 
   btn.textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
+  btn.disabled = false;
+});
+
+document.getElementById('recoverySubmitBtn').addEventListener('click', async () => {
+  const newPassword = document.getElementById('recoveryPassword').value;
+  const errEl = document.getElementById('recoveryError');
+  errEl.style.display = 'none';
+  if (!newPassword || newPassword.length < 6) {
+    errEl.style.color = '#f43f5e';
+    errEl.textContent = 'Password must be at least 6 characters.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('recoverySubmitBtn');
+  btn.textContent = '...';
+  btn.disabled = true;
+  try {
+    const { error } = await sb.auth.updateUser({ password: newPassword });
+    if (error) {
+      errEl.style.color = '#f43f5e';
+      errEl.textContent = error.message;
+      errEl.style.display = 'block';
+    } else {
+      document.getElementById('recoveryScreen').style.display = 'none';
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) { currentUser = session.user; showApp(); }
+      else { authMode = 'signin'; renderAuthMode(); document.getElementById('authScreen').style.display = 'flex'; }
+      notify('Password updated');
+    }
+  } catch(e) {
+    console.error('update password exception:', e);
+    errEl.style.color = '#f43f5e';
+    errEl.textContent = 'Error: ' + e.message;
+    errEl.style.display = 'block';
+  }
+  btn.textContent = 'Update password';
   btn.disabled = false;
 });
 
@@ -1789,6 +1975,23 @@ let sessionActive = false;
 let streak = 0;
 // Cache of personal bests keyed by exercise name
 let personalRecords = {};
+// Tracks which exercise-editor row (if any) is currently in edit mode or pending delete confirmation.
+// Only one row can be in either state at a time — opening one clears the other.
+let _editingExerciseIdx = null;
+let _confirmingDeleteIdx = null;
+
+// Basic focus trap: while any modal is open, mark the background app inert so
+// Tab/Shift+Tab and screen-reader virtual cursors can't reach it. Reference-counted
+// so a modal opened on top of another (e.g. recordPickerModal over recordsModal)
+// doesn't un-trap the background when the inner one closes first.
+let _openModalCount = 0;
+function setModalOpen(isOpen) {
+  _openModalCount = Math.max(0, _openModalCount + (isOpen ? 1 : -1));
+  const main = document.getElementById('mainApp');
+  if (!main) return;
+  if (_openModalCount > 0) main.setAttribute('inert', '');
+  else main.removeAttribute('inert');
+}
 
 const CIRCUMFERENCE = 2 * Math.PI * 118;
 
@@ -2767,6 +2970,7 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
 
   document.getElementById('modalRepsWarn').style.display = 'none';
   document.getElementById('workoutModal').classList.add('open');
+  setModalOpen(true);
   setTimeout(() => {
     const first = _modalType === 'reps'
       ? document.getElementById('modalReps')
@@ -2777,6 +2981,7 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
 
 function closeWorkoutModal(save) {
   document.getElementById('workoutModal').classList.remove('open');
+  setModalOpen(false);
   document.getElementById('modalRepsWarn').style.display = 'none';
   if (!_pendingModalCallback) return;
 
@@ -2849,6 +3054,7 @@ function toggleEditor() {
   const open = sec.style.display === 'none' || sec.style.display === '';
   sec.style.display = open ? 'block' : 'none';
   if (open) renderEditorList();
+  else { _editingExerciseIdx = null; _confirmingDeleteIdx = null; }
 }
 
 function renderEditorList() {
@@ -2868,17 +3074,117 @@ function renderEditorList() {
       lastCat = ex.category;
       header = `<div class="editor-cat-header" style="color:${color}">${ex.category}</div>`;
     }
+
+    if (_editingExerciseIdx === origIdx) {
+      const catOptions = BUCKET_ORDER.map(c => `<option ${c === ex.category ? 'selected' : ''}>${c}</option>`).join('');
+      return `${header}<div class="editor-item-edit-row" data-idx="${origIdx}">
+        <input class="ex-edit-name" value="${ex.name.replace(/"/g, '&quot;')}" placeholder="Exercise name" />
+        <select class="ex-edit-cat">${catOptions}</select>
+        <input class="ex-edit-note editor-full-row" value="${(ex.note || '').replace(/"/g, '&quot;')}" placeholder="Note (optional)" />
+        <div class="editor-item-edit-actions">
+          <button class="editor-item-edit-cancel" data-action="cancelEditExercise">Cancel</button>
+          <button class="editor-item-edit-save" data-action="saveEditExercise" data-idx="${origIdx}">Save</button>
+        </div>
+      </div>`;
+    }
+
+    const actions = _confirmingDeleteIdx === origIdx
+      ? `<span class="editor-confirm-del">Delete?
+          <button class="editor-confirm-no" data-action="cancelDeleteExercise">No</button>
+          <button class="editor-confirm-yes" data-action="confirmDeleteExercise" data-idx="${origIdx}">Yes</button>
+        </span>`
+      : `<button class="editor-btn-edit" data-action="startEditExercise" data-idx="${origIdx}" title="Edit">✎</button>
+         <button class="editor-btn-del" data-action="askDeleteExercise" data-idx="${origIdx}" title="Remove">✕</button>`;
+
     return `${header}<div class="editor-item">
       <span class="editor-item-name">${ex.name}</span>
       <span class="editor-item-note">${ex.note}</span>
-      <button class="editor-btn-del" onclick="deleteExercise(${origIdx})" title="Remove">✕</button>
+      ${actions}
     </div>`;
   }).join('');
+
+  // Wire up the per-row buttons (CSP-safe, no inline onclick)
+  list.querySelectorAll('[data-action="startEditExercise"]').forEach(btn => {
+    btn.addEventListener('click', () => { _confirmingDeleteIdx = null; _editingExerciseIdx = parseInt(btn.dataset.idx); renderEditorList(); });
+  });
+  list.querySelectorAll('[data-action="cancelEditExercise"]').forEach(btn => {
+    btn.addEventListener('click', () => { _editingExerciseIdx = null; renderEditorList(); });
+  });
+  list.querySelectorAll('[data-action="saveEditExercise"]').forEach(btn => {
+    btn.addEventListener('click', () => saveEditExercise(parseInt(btn.dataset.idx)));
+  });
+  list.querySelectorAll('[data-action="askDeleteExercise"]').forEach(btn => {
+    btn.addEventListener('click', () => { _editingExerciseIdx = null; _confirmingDeleteIdx = parseInt(btn.dataset.idx); renderEditorList(); });
+  });
+  list.querySelectorAll('[data-action="cancelDeleteExercise"]').forEach(btn => {
+    btn.addEventListener('click', () => { _confirmingDeleteIdx = null; renderEditorList(); });
+  });
+  list.querySelectorAll('[data-action="confirmDeleteExercise"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteExercise(parseInt(btn.dataset.idx)));
+  });
+
+  // Enter submits the edit row, Escape cancels it
+  const editRow = list.querySelector('.editor-item-edit-row');
+  if (editRow) {
+    editRow.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); saveEditExercise(parseInt(editRow.dataset.idx)); }
+      if (e.key === 'Escape') { e.preventDefault(); _editingExerciseIdx = null; renderEditorList(); }
+    });
+    editRow.querySelector('.ex-edit-name')?.focus();
+  }
+}
+
+// Renaming an exercise also migrates its personal record (records are keyed by exercise_name)
+// so a typo-fix or rename doesn't silently orphan an existing PR.
+async function saveEditExercise(idx) {
+  const row = document.querySelector(`.editor-item-edit-row[data-idx="${idx}"]`);
+  if (!row) return;
+  const newName = row.querySelector('.ex-edit-name').value.trim();
+  const newCat  = row.querySelector('.ex-edit-cat').value;
+  const newNote = row.querySelector('.ex-edit-note').value.trim() || '—';
+  if (!newName) { row.querySelector('.ex-edit-name').focus(); return; }
+
+  const oldEx = EXERCISES[idx];
+  if (!oldEx) return;
+  const oldName = oldEx.name;
+  const renamed = oldName !== newName;
+
+  EXERCISES[idx] = { name: newName, category: newCat, note: newNote };
+  saveExercises();
+
+  // Carry the in-memory PR over to the new name immediately so the UI is consistent
+  // even before the DB round-trip below resolves.
+  if (renamed && personalRecords[oldName]) {
+    personalRecords[newName] = personalRecords[oldName];
+    delete personalRecords[oldName];
+  }
+
+  if (renamed && currentUser) {
+    try {
+      await sb.from('personal_records')
+        .update({ exercise_name: newName })
+        .eq('user_id', currentUser.id)
+        .eq('exercise_name', oldName);
+      // Keep historical log entries pointing at the exercise under its new name too,
+      // so History/streak stats don't end up split across the old and new names.
+      await sb.from('workout_log')
+        .update({ exercise_name: newName })
+        .eq('user_id', currentUser.id)
+        .eq('exercise_name', oldName);
+    } catch(e) { console.error('rename exercise sync error:', e); }
+  }
+
+  _editingExerciseIdx = null;
+  renderEditorList();
+  rebuildQueue();
+  renderLog();
+  notify(renamed ? `Renamed to ${newName}` : `${newName} updated`);
 }
 
 function deleteExercise(i) {
   EXERCISES.splice(i, 1);
   saveExercises();
+  _confirmingDeleteIdx = null;
   renderEditorList();
   rebuildQueue();
 }
@@ -2901,10 +3207,12 @@ function addExercise() {
 function openHistory() {
   renderHistory();
   document.getElementById('historyModal').classList.add('open');
+  setModalOpen(true);
 }
 
 function closeHistory() {
   document.getElementById('historyModal').classList.remove('open');
+  setModalOpen(false);
   hideClearOldHistoryConfirm();
 }
 
@@ -2913,11 +3221,13 @@ function openRecordPicker() {
   filterRecordPicker('');
   switchRecordPickerTab('list');
   document.getElementById('recordPickerModal').classList.add('open');
+  setModalOpen(true);
   setTimeout(() => document.getElementById('recPickerSearch').focus(), 100);
 }
 
 function closeRecordPicker() {
   document.getElementById('recordPickerModal').classList.remove('open');
+  setModalOpen(false);
 }
 
 function switchRecordPickerTab(tab) {
@@ -3015,11 +3325,13 @@ async function saveNewRecord(ex, detail) {
 
 function openRecords() {
   document.getElementById('recordsModal').classList.add('open');
+  setModalOpen(true);
   loadRecordsFromDB();
 }
 
 function closeRecords() {
   document.getElementById('recordsModal').classList.remove('open');
+  setModalOpen(false);
 }
 
 async function loadRecordsFromDB() {
@@ -3461,6 +3773,7 @@ function openManualLog() {
   document.getElementById('pickerSearch').value = '';
   filterPicker('');
   document.getElementById('manualLogModal').classList.add('open');
+  setModalOpen(true);
   setTimeout(() => document.getElementById('pickerSearch').focus(), 100);
 }
 
@@ -3496,6 +3809,7 @@ function logCustomActivity() {
 
 function closeManualLog() {
   document.getElementById('manualLogModal').classList.remove('open');
+  setModalOpen(false);
 }
 
 function filterPicker(query) {
@@ -3773,6 +4087,17 @@ function bindStaticButtons() {
   document.querySelector('[data-action="closeRecords"]')?.addEventListener('click', closeRecords);
   $('recordPickerModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecordPicker(); });
   $('recordsModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecords(); });
+
+  // Escape closes whichever modal is currently open, topmost/nested one first
+  // (e.g. recordPickerModal can be open on top of recordsModal).
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if ($('recordPickerModal')?.classList.contains('open')) { closeRecordPicker(); return; }
+    if ($('manualLogModal')?.classList.contains('open'))    { closeManualLog(); return; }
+    if ($('workoutModal')?.classList.contains('open'))      { closeWorkoutModal('cancel'); return; }
+    if ($('recordsModal')?.classList.contains('open'))      { closeRecords(); return; }
+    if ($('historyModal')?.classList.contains('open'))      { closeHistory(); return; }
+  });
 }
 
 // ── Boot ──
