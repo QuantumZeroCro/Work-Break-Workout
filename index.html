@@ -1163,7 +1163,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.56</div>
+    <div class="app-version">v0.57</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1217,12 +1217,12 @@
   <h3>Settings</h3>
   <div class="setting-row">
     <label>Break interval</label>
-    <input type="range" id="intervalSlider" min="10" max="60" value="30" step="5">
+    <input type="range" id="intervalSlider" min="10" max="60" value="30" step="5" />
     <span id="intervalVal">30 min</span>
   </div>
   <div class="setting-row">
     <label>Shuffle exercises</label>
-    <input type="checkbox" id="shuffleCheck" checked>
+    <input type="checkbox" id="shuffleCheck" checked />
   </div>
   <div class="setting-row">
     <label class="label-danger">Reset today</label>
@@ -1913,9 +1913,16 @@ const EXERCISE_MIGRATIONS = [
   // },
 ];
 
-function applyExerciseMigrations(exercises) {
-  let migrationVersion = 0;
-  try { migrationVersion = parseInt(localStorage.getItem('wbw_exercises_version') || '0'); } catch(e) {}
+// baselineVersion: if omitted, uses this device's own localStorage migration version
+// (the normal case — migrating local data in place). Pass 0 explicitly when migrating
+// data whose history isn't tracked by this device's localStorage, e.g. a list pulled
+// from the DB that may have been written by an older app version on a different device.
+function applyExerciseMigrations(exercises, baselineVersion) {
+  let migrationVersion = baselineVersion;
+  if (migrationVersion === undefined) {
+    migrationVersion = 0;
+    try { migrationVersion = parseInt(localStorage.getItem('wbw_exercises_version') || '0'); } catch(e) {}
+  }
 
   let changed = false;
   for (const migration of EXERCISE_MIGRATIONS) {
@@ -1991,14 +1998,15 @@ async function loadExercisesFromDB() {
       .maybeSingle();
     if (error) { console.error('loadExercisesFromDB error:', error); return; }
     if (data?.exercises && Array.isArray(data.exercises) && data.exercises.length) {
-      EXERCISES = data.exercises;
-      try {
-        localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES));
-        // The DB copy already passed through migrations on whichever device last saved it —
-        // mark this device as caught up too, so future migrations don't re-run against it.
-        const latest = Math.max(0, ...EXERCISE_MIGRATIONS.map(m => m.version));
-        localStorage.setItem('wbw_exercises_version', String(latest));
-      } catch(e) {}
+      // Don't assume the DB copy is already migrated — it may have been written by an
+      // older version of this app (e.g. before a rename/removal migration existed) on
+      // a different device. Force baseline 0 so every migration is checked against it,
+      // regardless of this device's own local migration version.
+      EXERCISES = applyExerciseMigrations(data.exercises, 0);
+      try { localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES)); } catch(e) {}
+      // If migrations changed anything, push the corrected list back so other devices
+      // (and this DB row) catch up too.
+      syncExercisesToDB();
     } else {
       // No row yet for this user — push whatever we have locally (defaults or
       // pre-sign-in edits) so the DB has a starting point for future devices.
