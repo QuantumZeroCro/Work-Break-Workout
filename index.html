@@ -1163,7 +1163,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.55</div>
+    <div class="app-version">v0.56</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1957,6 +1957,54 @@ let EXERCISES = (() => {
 
 function saveExercises() {
   try { localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES)); } catch(e) {}
+  syncExercisesToDB();
+}
+
+// Debounced DB push: rapid edits (e.g. typing in the rename form before Save) shouldn't
+// each fire a separate request — only the final state after a short pause gets synced.
+let _exercisesSyncTimer = null;
+function syncExercisesToDB() {
+  if (!currentUser) return; // local-only until signed in; loadExercisesFromDB will merge on next sign-in
+  clearTimeout(_exercisesSyncTimer);
+  _exercisesSyncTimer = setTimeout(async () => {
+    try {
+      const { error } = await sb.from('user_exercises').upsert({
+        user_id: currentUser.id,
+        exercises: EXERCISES,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      if (error) console.error('syncExercisesToDB error:', error);
+    } catch(e) { console.error('syncExercisesToDB exception:', e); }
+  }, 400);
+}
+
+// Loads the exercise list from the DB on sign-in so a custom list (additions, edits,
+// deletes, reorders) is available on every device, not just the one it was made on.
+// Falls back silently to whatever's already in localStorage/defaults if the user has
+// no saved row yet (e.g. first time signing in) or if the request fails.
+async function loadExercisesFromDB() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await sb.from('user_exercises')
+      .select('exercises')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (error) { console.error('loadExercisesFromDB error:', error); return; }
+    if (data?.exercises && Array.isArray(data.exercises) && data.exercises.length) {
+      EXERCISES = data.exercises;
+      try {
+        localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES));
+        // The DB copy already passed through migrations on whichever device last saved it —
+        // mark this device as caught up too, so future migrations don't re-run against it.
+        const latest = Math.max(0, ...EXERCISE_MIGRATIONS.map(m => m.version));
+        localStorage.setItem('wbw_exercises_version', String(latest));
+      } catch(e) {}
+    } else {
+      // No row yet for this user — push whatever we have locally (defaults or
+      // pre-sign-in edits) so the DB has a starting point for future devices.
+      syncExercisesToDB();
+    }
+  } catch(e) { console.error('loadExercisesFromDB exception:', e); }
 }
 
 const CATEGORY_COLORS = {
@@ -3936,6 +3984,7 @@ function syncQueueWithLog() {
 // ── Init (called after auth) ──
 async function initApp() {
   loadSettings();
+  await loadExercisesFromDB(); // sync custom exercise list before building today's queue
   rebuildQueue();
   loadState();
   syncQueueWithLog(); // remove already-done exercises from queue
