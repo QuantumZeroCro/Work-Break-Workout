@@ -1163,7 +1163,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.58</div>
+    <div class="app-version">v0.59</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -3255,13 +3255,35 @@ function addExercise() {
   const cat = document.getElementById('newExCat').value;
   const note = document.getElementById('newExNote').value.trim() || '—';
   if (!name) { document.getElementById('newExName').focus(); return; }
-  EXERCISES.push({ name, category: cat, note });
+  const newEx = { name, category: cat, note };
+  EXERCISES.push(newEx);
   saveExercises();
   document.getElementById('newExName').value = '';
   document.getElementById('newExNote').value = '';
   renderEditorList();
-  rebuildQueue();
-  syncQueueWithLog(); // re-apply today's done/skipped state — rebuildQueue() resets to a fresh full queue
+
+  // Was the celebration ("all done") screen showing before this addition?
+  const wasAllDone = currentIdx >= queue.length;
+
+  // Append to the end of today's existing queue rather than rebuilding (which would
+  // reshuffle everything and reset progress) — the new exercise should just be the
+  // last thing left to do today, not shuffled in among what's already queued.
+  queue.push(newEx);
+  syncQueueWithLog(); // harmless no-op for the new exercise, but keeps done/skipped state consistent
+
+  if (wasAllDone) {
+    // There's now something to do again — back out of the celebration screen and
+    // return to the normal "ready to start" state rather than leaving the ring
+    // stuck on 🎉 with nothing reflecting the newly added exercise.
+    document.getElementById('btnDone').disabled = true;
+    document.getElementById('btnSkip').disabled = true;
+    document.getElementById('ringTime').textContent = 'START';
+    document.getElementById('ringLabel').textContent = 'ready to go';
+    document.getElementById('ringSubLabel').textContent = 'press start';
+    document.getElementById('ringProgress').style.stroke = '#3b82f6';
+    updateRingClickability();
+  }
+
   notify(`+ ${name} added`);
 }
 
