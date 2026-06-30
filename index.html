@@ -1163,7 +1163,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.57</div>
+    <div class="app-version">v0.58</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1450,6 +1450,9 @@
           <button class="custom-template-btn" data-name="Running" data-cat="Cardio">🏃 Running</button>
           <button class="custom-template-btn" data-name="Sprint" data-cat="Cardio">⚡ Sprint</button>
           <button class="custom-template-btn" data-name="Cycling" data-cat="Cardio">🚴 Cycling</button>
+          <button class="custom-template-btn" data-name="Walking" data-cat="Cardio">🚶 Walking</button>
+          <button class="custom-template-btn" data-name="Hiking" data-cat="Cardio">🥾 Hiking</button>
+          <button class="custom-template-btn" data-name="Swimming" data-cat="Cardio">🏊 Swimming</button>
         </div>
       </div>
       <div class="picker-custom-fields">
@@ -1902,7 +1905,7 @@ const EXERCISE_MIGRATIONS = [
   },
   // Add future migrations here, e.g.:
   // {
-  //   version: 2,
+  //   version: 3,
   //   description: 'Add Archer Push Up to Pushing',
   //   apply(exercises) {
   //     if (!exercises.find(e => e.name === 'Archer Push Up')) {
@@ -3233,6 +3236,7 @@ async function saveEditExercise(idx) {
   _editingExerciseIdx = null;
   renderEditorList();
   rebuildQueue();
+  syncQueueWithLog(); // re-apply today's done/skipped state — rebuildQueue() resets to a fresh full queue
   renderLog();
   notify(renamed ? `Renamed to ${newName}` : `${newName} updated`);
 }
@@ -3243,6 +3247,7 @@ function deleteExercise(i) {
   _confirmingDeleteIdx = null;
   renderEditorList();
   rebuildQueue();
+  syncQueueWithLog(); // re-apply today's done/skipped state — rebuildQueue() resets to a fresh full queue
 }
 
 function addExercise() {
@@ -3256,6 +3261,7 @@ function addExercise() {
   document.getElementById('newExNote').value = '';
   renderEditorList();
   rebuildQueue();
+  syncQueueWithLog(); // re-apply today's done/skipped state — rebuildQueue() resets to a fresh full queue
   notify(`+ ${name} added`);
 }
 
