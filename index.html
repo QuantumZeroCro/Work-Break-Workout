@@ -222,12 +222,6 @@
   }
   .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
   .btn-primary:active { transform: translateY(0); }
-  .btn-primary.warn-restart {
-    background: var(--surface);
-    color: #f59e0b;
-    border: 1px solid #f59e0b;
-  }
-  .btn-primary.warn-restart:hover { background: rgba(245,158,11,0.1); transform: translateY(-1px); }
 
   .btn-ghost {
     background: var(--surface);
@@ -237,6 +231,7 @@
     border: 1px solid var(--surface2);
   }
   .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+  .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 
   /* ── Stats bar ── */
   .stats-bar {
@@ -301,6 +296,22 @@
     min-width: 20px;
   }
   .queue-item.next .q-num { color: var(--accent); }
+  .q-name { flex: 1; }
+  .q-cat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .q-cat-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
 
   /* ── Settings panel ── */
   .settings-panel {
@@ -1063,7 +1074,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.53</div>
+    <div class="app-version">v0.54</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1103,7 +1114,6 @@
 
 <!-- Controls -->
 <div class="controls">
-  <button class="btn-primary" id="btnStart" aria-live="polite">Start Session</button>
   <button class="btn-done" id="btnDone" aria-label="Mark exercise as done" >✓ Done</button>
   <button class="btn-ghost" id="btnSkip" aria-label="Skip this exercise" >Skip →</button>
   <button class="btn-ghost" aria-label="Toggle settings" >⚙ Settings</button>
@@ -1198,7 +1208,17 @@
   <div class="modal modal-history">
     <div class="modal-header">
       <h3>History</h3>
-      <button class="btn-modal-close" >×</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn-ghost" style="font-size:12px;padding:4px 10px;" id="btnClearOldHistoryTrigger" title="Free up local storage space">Clear old data</button>
+        <button class="btn-modal-close" >×</button>
+      </div>
+    </div>
+    <div class="reset-confirm" id="clearOldHistoryConfirm">
+      <div class="reset-confirm-msg">This removes locally cached history older than today from this device (frees up storage space). Entries also saved to your account are not affected and can still be viewed when synced.</div>
+      <div class="reset-confirm-btns">
+        <button class="btn-cancel-small" data-action="hideClearOldHistory">Cancel</button>
+        <button class="btn-danger" data-action="confirmClearOldHistory">Yes, clear local cache</button>
+      </div>
     </div>
     <div class="history-list" id="historyList"></div>
   </div>
@@ -1296,7 +1316,7 @@
       <button class="picker-tab" id="recPickerTabCustom" onclick="switchRecordPickerTab('custom')">Custom</button>
     </div>
     <div id="recPickerPanelList">
-      <input class="picker-search" id="recPickerSearch" placeholder="Search exercises…" oninput="filterRecordPicker(this.value)" />
+      <input class="picker-search" id="recPickerSearch" placeholder="Search exercises…" />
       <div class="picker-list" id="recPickerList"></div>
     </div>
     <div id="recPickerPanelCustom" style="display:none">
@@ -1327,7 +1347,7 @@
 
     <!-- From list -->
     <div id="pickerPanelList">
-      <input class="picker-search" id="pickerSearch" placeholder="Search exercises…" oninput="filterPicker(this.value)" />
+      <input class="picker-search" id="pickerSearch" placeholder="Search exercises…" />
       <div class="picker-list" id="pickerList"></div>
     </div>
 
@@ -1617,7 +1637,7 @@ async function loadHistoryFromDB() {
     });
     // Cache in localStorage for offline access
     Object.entries(byDay).forEach(([key, entries]) => {
-      if (key !== TODAY_KEY) {
+      if (key !== getTodayKey()) {
         try { localStorage.setItem(key, JSON.stringify({ log: entries })); } catch(e) {}
       }
     });
@@ -1896,14 +1916,18 @@ document.addEventListener('visibilitychange', () => {
 
 let dailyLog = [];
 let skippedToday = new Set(); // names skipped this session — persisted so reload doesn't re-queue them
-let viewingDay = null; // set after TODAY_KEY is defined
+let viewingDay = null; // set after getTodayKey() is available
 
 // ── localStorage helpers ──
-const TODAY_KEY = 'wbw_' + getTodaySeed();
+// TODAY_KEY used to be a const computed once at page load, which meant a tab
+// left open across midnight kept writing under yesterday's key. getTodayKey()
+// always recomputes from the current date, so it stays correct across a
+// midnight rollover without needing a page reload.
+function getTodayKey() { return 'wbw_' + getTodaySeed(); }
 
 function saveState() {
   try {
-    localStorage.setItem(TODAY_KEY, JSON.stringify({
+    localStorage.setItem(getTodayKey(), JSON.stringify({
       log: dailyLog,
       streak,
       currentIdx,
@@ -1917,7 +1941,7 @@ function saveState() {
   } catch(e) {
     if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
       console.warn('localStorage quota exceeded — state not saved. Try clearing old history.');
-      notify('⚠ Storage full — clear old history in History tab');
+      notify('⚠ Storage full — use "Clear old data" in History');
     } else {
       console.error('saveState error:', e);
     }
@@ -1942,7 +1966,7 @@ function loadSettings() {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(TODAY_KEY);
+    const raw = localStorage.getItem(getTodayKey());
     if (!raw) return;
     const data = JSON.parse(raw);
     dailyLog = data.log || [];
@@ -1972,7 +1996,7 @@ function getAllDayKeys() {
     return Object.keys(localStorage)
       .filter(k => /^wbw_\d{8}$/.test(k))
       .sort().reverse();
-  } catch(e) { return [TODAY_KEY]; }
+  } catch(e) { return [getTodayKey()]; }
 }
 
 function keyToLabel(key) {
@@ -1991,11 +2015,11 @@ function keyToLabel(key) {
 
 function renderLogDays() {
   const keys = getAllDayKeys();
-  if (!keys.includes(TODAY_KEY)) keys.unshift(TODAY_KEY);
+  if (!keys.includes(getTodayKey())) keys.unshift(getTodayKey());
   const container = document.getElementById('logDays');
   // Hide days (other than today) with no logged (non-skip) exercises
   const visibleKeys = keys.filter(key => {
-    if (key === TODAY_KEY) return true;
+    if (key === getTodayKey()) return true;
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return false;
@@ -2021,6 +2045,29 @@ function switchDay(key) {
   renderLogForKey(key);
 }
 
+function showClearOldHistoryConfirm() {
+  document.getElementById('clearOldHistoryConfirm').classList.add('open');
+  document.getElementById('btnClearOldHistoryTrigger').style.display = 'none';
+}
+
+function hideClearOldHistoryConfirm() {
+  document.getElementById('clearOldHistoryConfirm').classList.remove('open');
+  document.getElementById('btnClearOldHistoryTrigger').style.display = '';
+}
+
+// Frees up localStorage space by removing cached day logs other than today's.
+// This only clears the local cache — entries already synced to the DB (workout_log)
+// are untouched and will reappear in History (read from the DB) for signed-in users.
+async function confirmClearOldHistory() {
+  hideClearOldHistoryConfirm();
+  const todayKey = getTodayKey();
+  const keys = getAllDayKeys().filter(k => k !== todayKey);
+  keys.forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
+  notify(keys.length ? `Cleared ${keys.length} day${keys.length === 1 ? '' : 's'} of local cache` : 'No local cache to clear');
+  await renderHistory();
+  renderLogDays();
+}
+
 function showClearLogConfirm() {
   document.getElementById('clearLogConfirm').classList.add('open');
   document.getElementById('btnClearLog').style.display = 'none';
@@ -2038,9 +2085,9 @@ async function confirmClearLog() {
 
 function renderLog() {
   renderLogDays();
-  renderLogForKey(viewingDay || TODAY_KEY);
+  renderLogForKey(viewingDay || getTodayKey());
   // Show clear button only when viewing today
-  const isToday = viewingDay === TODAY_KEY || !viewingDay;
+  const isToday = viewingDay === getTodayKey() || !viewingDay;
   const clearBtn = document.getElementById('btnClearLog');
   if (clearBtn) clearBtn.style.display = isToday ? '' : 'none';
   if (!isToday) hideClearLogConfirm();
@@ -2048,7 +2095,7 @@ function renderLog() {
 
 function renderLogForKey(key) {
   const list = document.getElementById('logList');
-  let log = (key === TODAY_KEY) ? dailyLog : (() => {
+  let log = (key === getTodayKey()) ? dailyLog : (() => {
     try { return JSON.parse(localStorage.getItem(key) || '{}').log || []; } catch(e) { return []; }
   })();
 
@@ -2057,7 +2104,7 @@ function renderLogForKey(key) {
     list.innerHTML = '<div class="log-empty">No exercises logged</div>';
     return;
   }
-  const isToday = key === TODAY_KEY;
+  const isToday = key === getTodayKey();
   list.innerHTML = log.map((entry, idx) => {
     const color = CATEGORY_COLORS[entry.category] || '#60a5fa';
     const skipped = entry.how === 'skip';
@@ -2162,10 +2209,6 @@ async function resetDay() {
 
   clearInterval(timerInterval);
   sessionActive = false;
-  const btnStart = document.getElementById('btnStart');
-  btnStart.disabled = false;
-  btnStart.textContent = 'Start Session';
-  btnStart.classList.remove('warn-restart');
   document.getElementById('btnDone').disabled = true;
   document.getElementById('btnSkip').disabled = true;
 
@@ -2254,7 +2297,7 @@ async function deleteLogEntry(idx) {
 }
 
 async function deleteLogEntryForKey(key, idx) {
-  if (key === TODAY_KEY) { deleteLogEntry(idx); return; }
+  if (key === getTodayKey()) { deleteLogEntry(idx); return; }
 
   // Past day — load from localStorage
   let parsed;
@@ -2278,7 +2321,7 @@ async function deleteLogEntryForKey(key, idx) {
 }
 
 function editLogEntryForKey(key, idx) {
-  if (key === TODAY_KEY) { editLogEntry(idx); return; }
+  if (key === getTodayKey()) { editLogEntry(idx); return; }
 
   // Past day — load from localStorage
   let parsed;
@@ -2403,10 +2446,6 @@ function startCountdown() {
 function showAllDone() {
   clearInterval(timerInterval);
   sessionActive = false;
-  const btnStart = document.getElementById('btnStart');
-  btnStart.disabled = false;
-  btnStart.textContent = 'Restart day?';
-  btnStart.classList.add('warn-restart');
   document.getElementById('btnDone').disabled = true;
   document.getElementById('btnSkip').disabled = true;
   document.getElementById('ringLabel').textContent = 'all done!';
@@ -2421,10 +2460,6 @@ function showAllDone() {
 }
 
 function startSession() {
-  const btnStart = document.getElementById('btnStart');
-  btnStart.classList.remove('warn-restart');
-  btnStart.disabled = true;
-  btnStart.textContent = 'Session active';
   clearInterval(timerInterval); // clear any lingering timer
   sessionActive = true;
   if (queue.length === 0 || currentIdx >= queue.length) rebuildQueue();
@@ -2509,23 +2544,21 @@ function scheduleMidnightReset() {
   midnight.setHours(24, 0, 0, 0);
   const msUntilMidnight = midnight - now;
   setTimeout(() => {
-    // TODAY_KEY is a const so we need to reload the page to get the new date key.
-    // The cleanest approach: reload if a session is not active, otherwise just reset state.
-    if (!sessionActive) {
-      location.reload();
-      return;
-    }
+    // getTodayKey() recomputes from the current date every time it's called, so the
+    // day boundary is now handled correctly without needing a page reload — in-memory
+    // state is simply reset and the next saveState()/render call picks up the new key.
     dailyLog = [];
     streak = 0;
     currentIdx = 0;
     skippedToday = new Set();
+    viewingDay = getTodayKey();
     document.getElementById('statDone').textContent = 0;
     rebuildQueue();
     updateExerciseDisplay();
     renderQueue();
     renderLog();
     updateDayProgress();
-    startCountdown();
+    if (sessionActive) startCountdown();
     scheduleMidnightReset(); // schedule next day
   }, msUntilMidnight);
 }
@@ -2622,7 +2655,8 @@ function renderQueue() {
     if (!ex) continue;
     const div = document.createElement('div');
     div.className = 'queue-item' + (i === 0 ? ' next' : '');
-    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span>${ex.name}`;
+    const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
+    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span><span class="q-name">${ex.name}</span><span class="q-cat"><span class="q-cat-dot" style="background:${color}"></span>${ex.category || ''}</span>`;
     list.appendChild(div);
   }
 }
@@ -2647,8 +2681,8 @@ function updateRingClickability() {
   if (!container) return;
   const allDone = document.getElementById('ringTime')?.textContent === '🎉';
   if (allDone) {
-    container.classList.remove('ring-clickable');
-    container.title = '';
+    container.classList.add('ring-clickable');
+    container.title = 'Click to restart the day';
   } else if (!sessionActive) {
     container.classList.add('ring-clickable');
     container.title = 'Click to start session';
@@ -2871,6 +2905,7 @@ function openHistory() {
 
 function closeHistory() {
   document.getElementById('historyModal').classList.remove('open');
+  hideClearOldHistoryConfirm();
 }
 
 function openRecordPicker() {
@@ -3590,7 +3625,7 @@ async function initApp() {
   rebuildQueue();
   loadState();
   syncQueueWithLog(); // remove already-done exercises from queue
-  viewingDay = TODAY_KEY;
+  viewingDay = getTodayKey();
   updateExerciseDisplay();
   renderQueue();
   renderLog();
@@ -3630,8 +3665,6 @@ async function initApp() {
     const secondsSinceLog = Math.floor((Date.now() - lastLoggedAt.getTime()) / 1000);
     const intervalSec = intervalMinutes * 60;
     sessionActive = true;
-    document.getElementById('btnStart').disabled = true;
-    document.getElementById('btnStart').textContent = 'Session active';
 
     if (secondsSinceLog >= intervalSec) {
       // Interval already passed — immediately show next exercise
@@ -3662,19 +3695,19 @@ function bindStaticButtons() {
   $('intervalSlider') ?.addEventListener('input',  e => updateInterval(e.target.value));
   $('shuffleCheck')   ?.addEventListener('change', () => { rebuildQueue(); saveState(); });
 
-  $('btnStart')       ?.addEventListener('click', startSession);
   $('btnDone')        ?.addEventListener('click', doneExercise);
   $('btnSkip')        ?.addEventListener('click', skipExercise);
   $('btnResetTrigger')        ?.addEventListener('click', showResetConfirm);
   $('btnResetRecordsTrigger') ?.addEventListener('click', showResetRecordsConfirm);
   $('btnClearLog')    ?.addEventListener('click', showClearLogConfirm);
+  $('btnClearOldHistoryTrigger') ?.addEventListener('click', showClearOldHistoryConfirm);
 
   // Ring click — context-sensitive shortcut
   $('ringContainer')?.addEventListener('click', () => {
     const allDone = $('ringTime')?.textContent === '🎉';
-    if (allDone) return; // nothing to do on celebration screen
+    if (allDone) { startSession(); return; } // restart the day from the celebration screen
     if (!sessionActive) {
-      // Pre-session (START) or Restart day?
+      // Pre-session (START)
       startSession();
     } else if (exerciseTriggered) {
       // GO! state — act as Done
@@ -3696,6 +3729,8 @@ function bindStaticButtons() {
   document.querySelector('.btn-danger[data-action="confirmResetRecords"]')?.addEventListener('click', confirmResetRecords);
   document.querySelector('.btn-cancel-small[data-action="hideClear"]')?.addEventListener('click', hideClearLogConfirm);
   document.querySelector('.btn-danger[data-action="confirmClear"]')?.addEventListener('click', confirmClearLog);
+  document.querySelector('.btn-cancel-small[data-action="hideClearOldHistory"]')?.addEventListener('click', hideClearOldHistoryConfirm);
+  document.querySelector('.btn-danger[data-action="confirmClearOldHistory"]')?.addEventListener('click', confirmClearOldHistory);
 
   document.querySelector('.editor-add-btn[data-action="addExercise"]')?.addEventListener('click', addExercise);
   document.querySelector('.editor-add-btn[data-action="logCustom"]')?.addEventListener('click', logCustomActivity);
@@ -3721,6 +3756,9 @@ function bindStaticButtons() {
       warn.style.display = 'none';
     }
   });
+
+  $('recPickerSearch')?.addEventListener('input', e => filterRecordPicker(e.target.value));
+  $('pickerSearch')   ?.addEventListener('input', e => filterPicker(e.target.value));
 
   $('tabFromList')?.addEventListener('click', () => switchPickerTab('list'));
   $('tabCustom')  ?.addEventListener('click', () => switchPickerTab('custom'));
