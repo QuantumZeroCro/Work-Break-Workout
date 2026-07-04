@@ -535,6 +535,7 @@
     width: 100%;
   }
   .modal-field input:focus { border-color: var(--accent); }
+  .modal-field input[type="date"] { color-scheme: dark; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
   /* ── Exercise editor ── */
@@ -1163,7 +1164,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.59</div>
+    <div class="app-version">v0.60</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1378,7 +1379,8 @@
       </div>
       <!-- Log time override -->
       <div class="modal-field">
-        <label>Log time — optional</label>
+        <label>Log date &amp; time — optional</label>
+        <input type="date" id="modalLogDate" style="margin-bottom:6px" />
         <div class="duration-inputs">
           <input type="number" id="modalLogH" placeholder="HH" min="0" max="23" />
           <span class="duration-sep">:</span>
@@ -2180,6 +2182,18 @@ let dailyLog = [];
 let skippedToday = new Set(); // names skipped this session — persisted so reload doesn't re-queue them
 let viewingDay = null; // set after getTodayKey() is available
 
+// ── Security: HTML-escaping for user-controlled strings ──
+// Exercise names/notes and custom activity names are free text typed by the
+// user (or synced from Supabase) and are later inserted into innerHTML for
+// rendering. Without escaping, a name like `<img src=x onerror=...>` would
+// execute as script (stored XSS). Every place that interpolates such text
+// into an HTML template must run it through escapeHtml() first. Safe for
+// both text nodes and double-quoted attribute values.
+const _escapeHtmlMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, ch => _escapeHtmlMap[ch]);
+}
+
 // ── localStorage helpers ──
 // TODAY_KEY used to be a const computed once at page load, which meant a tab
 // left open across midnight kept writing under yesterday's key. getTodayKey()
@@ -2243,14 +2257,40 @@ function addToLog(ex, how, detail, loggedAt) {
   const now = loggedAt || new Date();
   const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
   const entry = { name: ex.name, category: ex.category, time, how, detail: detail || null, loggedAt: now.toISOString() };
-  dailyLog.unshift(entry);
-  streak = dailyLog.filter(e => e.how !== 'skip').length;
-  document.getElementById('statDone').textContent = streak;
-  // Update personal record cache immediately so card refreshes without a reload
+  const targetKey = 'wbw_' + (now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate());
+
+  // Personal records aren't day-scoped, so update the cache either way
   if (detail) updateRecordCache(ex.name, detail);
-  saveState();
   syncLogToDB(entry);
-  renderLog();
+
+  if (targetKey === getTodayKey()) {
+    // Normal case: logging for today
+    dailyLog.unshift(entry);
+    streak = dailyLog.filter(e => e.how !== 'skip').length;
+    document.getElementById('statDone').textContent = streak;
+    saveState();
+    renderLog();
+  } else {
+    // Backdated entry: today's in-memory dailyLog isn't the right place —
+    // write straight into that day's own localStorage bucket instead, so
+    // it shows up correctly in History / the log-day tabs without a reload.
+    saveEntryToDayKey(targetKey, entry);
+    renderLogDays();
+    if (viewingDay === targetKey) renderLogForKey(targetKey);
+  }
+}
+
+function saveEntryToDayKey(key, entry) {
+  try {
+    const raw = localStorage.getItem(key);
+    const data = raw ? JSON.parse(raw) : { log: [], streak: 0, currentIdx: 0, skippedToday: [] };
+    data.log = data.log || [];
+    data.log.unshift(entry);
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch(e) {
+    console.error('saveEntryToDayKey error:', e);
+    notify('⚠ Could not save backdated entry locally');
+  }
 }
 
 function getAllDayKeys() {
@@ -2268,11 +2308,12 @@ function keyToLabel(key) {
   const m = Math.floor((seed % 10000) / 100);
   const d = seed % 100;
   const date = new Date(y, m - 1, d);
-  if (seed === getTodaySeed()) return 'Today';
+  if (seed === getTodaySeed()) return 'Danas';
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
   const ySeed = yesterday.getFullYear() * 10000 + (yesterday.getMonth() + 1) * 100 + yesterday.getDate();
-  if (seed === ySeed) return 'Yesterday';
-  return date.toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' });
+  if (seed === ySeed) return 'Jučer';
+  const days = ['Ned', 'Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub'];
+  return `${days[date.getDay()]}, ${d}.${m}.`;
 }
 
 function renderLogDays() {
@@ -2396,7 +2437,7 @@ function renderLogForKey(key) {
     return `<div class="log-item">
       <div class="log-item-left">
         <div class="log-dot" style="background:${color}"></div>
-        <span class="log-name">${entry.name}</span>
+        <span class="log-name">${escapeHtml(entry.name)}</span>
         ${skipTag}${manualTag}${detailHtml}${editBtn}
       </div>
       <div class="log-item-right">
@@ -2593,11 +2634,32 @@ function editLogEntryForKey(key, idx) {
   if (!entry) return;
 
   const ex = { name: entry.name, category: entry.category, note: '' };
-  openWorkoutModal(ex, async (detail) => {
+  openWorkoutModal(ex, async (detail, loggedAt) => {
     if (!detail) return;
     entry.detail = detail;
-    parsed.log = log;
-    localStorage.setItem(key, JSON.stringify(parsed));
+    let newKey = key;
+    if (loggedAt) {
+      entry.time = loggedAt.getHours().toString().padStart(2,'0') + ':' + loggedAt.getMinutes().toString().padStart(2,'0');
+      entry.loggedAt = loggedAt.toISOString();
+      newKey = 'wbw_' + (loggedAt.getFullYear() * 10000 + (loggedAt.getMonth() + 1) * 100 + loggedAt.getDate());
+    }
+
+    if (newKey !== key) {
+      // Moved to a different day — remove from this bucket, add to the new one
+      log.splice(idx, 1);
+      parsed.log = log;
+      localStorage.setItem(key, JSON.stringify(parsed));
+      if (newKey === getTodayKey()) {
+        dailyLog.unshift(entry);
+        saveState();
+      } else {
+        saveEntryToDayKey(newKey, entry);
+      }
+      renderLogDays();
+    } else {
+      parsed.log = log;
+      localStorage.setItem(key, JSON.stringify(parsed));
+    }
 
     if (currentUser && entry.id) {
       try {
@@ -2606,11 +2668,12 @@ function editLogEntryForKey(key, idx) {
           sets: detail.sets || null,
           weight: detail.weight || null,
           duration_seconds: detail.duration_seconds || null,
+          ...(loggedAt ? { logged_at: entry.loggedAt } : {})
         }).eq('id', entry.id).eq('user_id', currentUser.id);
       } catch(e) { console.error('editLogEntryForKey save error:', e); }
     }
 
-    notify(`✓ Updated — ${entry.name}`);
+    notify(`✓ Updated — ${entry.name}${logDateSuffix(loggedAt)}`);
     renderLog();
   }, entry.detail);
 }
@@ -2918,7 +2981,7 @@ function renderQueue() {
     const div = document.createElement('div');
     div.className = 'queue-item' + (i === 0 ? ' next' : '');
     const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
-    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span><span class="q-name">${ex.name}</span><span class="q-cat"><span class="q-cat-dot" style="background:${color}"></span>${ex.category || ''}</span>`;
+    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span><span class="q-name">${escapeHtml(ex.name)}</span><span class="q-cat"><span class="q-cat-dot" style="background:${color}"></span>${escapeHtml(ex.category || '')}</span>`;
     list.appendChild(div);
   }
 }
@@ -3026,6 +3089,11 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
   document.getElementById('modalWeight').value = prefill?.weight || '';
   document.getElementById('modalLogH').value = '';
   document.getElementById('modalLogM').value = '';
+  const logDateEl = document.getElementById('modalLogDate');
+  logDateEl.value = '';
+  // Can't log a workout that hasn't happened yet
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  logDateEl.max = todayStr;
 
   document.getElementById('modalRepsWarn').style.display = 'none';
   document.getElementById('workoutModal').classList.add('open');
@@ -3083,11 +3151,25 @@ function closeWorkoutModal(save) {
       detail = { reps: repsRaw || null, sets, weight };
     }
 
+    const dateStr = document.getElementById('modalLogDate').value; // 'YYYY-MM-DD' or ''
     const lh = parseInt(document.getElementById('modalLogH').value);
     const lm = parseInt(document.getElementById('modalLogM').value);
-    if (!isNaN(lh) && document.getElementById('modalLogH').value !== '') {
-      loggedAt = new Date();
-      loggedAt.setHours(lh, isNaN(lm) ? 0 : lm, 0, 0);
+    const hasTime = !isNaN(lh) && document.getElementById('modalLogH').value !== '';
+
+    if (dateStr || hasTime) {
+      if (dateStr) {
+        const [y, mo, d] = dateStr.split('-').map(Number);
+        loggedAt = new Date(y, mo - 1, d); // local midnight on the chosen date
+      } else {
+        loggedAt = new Date(); // no date chosen — keep today
+      }
+      if (hasTime) {
+        loggedAt.setHours(lh, isNaN(lm) ? 0 : lm, 0, 0);
+      } else {
+        // No time given: keep current time-of-day, just moved to the chosen date
+        const now = new Date();
+        loggedAt.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
+      }
     }
 
     if (_modalQueueMode === 'done') {
@@ -3137,9 +3219,9 @@ function renderEditorList() {
     if (_editingExerciseIdx === origIdx) {
       const catOptions = BUCKET_ORDER.map(c => `<option ${c === ex.category ? 'selected' : ''}>${c}</option>`).join('');
       return `${header}<div class="editor-item-edit-row" data-idx="${origIdx}">
-        <input class="ex-edit-name" value="${ex.name.replace(/"/g, '&quot;')}" placeholder="Exercise name" />
+        <input class="ex-edit-name" value="${escapeHtml(ex.name)}" placeholder="Exercise name" />
         <select class="ex-edit-cat">${catOptions}</select>
-        <input class="ex-edit-note editor-full-row" value="${(ex.note || '').replace(/"/g, '&quot;')}" placeholder="Note (optional)" />
+        <input class="ex-edit-note editor-full-row" value="${escapeHtml(ex.note || '')}" placeholder="Note (optional)" />
         <div class="editor-item-edit-actions">
           <button class="editor-item-edit-cancel" data-action="cancelEditExercise">Cancel</button>
           <button class="editor-item-edit-save" data-action="saveEditExercise" data-idx="${origIdx}">Save</button>
@@ -3156,8 +3238,8 @@ function renderEditorList() {
          <button class="editor-btn-del" data-action="askDeleteExercise" data-idx="${origIdx}" title="Remove">✕</button>`;
 
     return `${header}<div class="editor-item">
-      <span class="editor-item-name">${ex.name}</span>
-      <span class="editor-item-note">${ex.note}</span>
+      <span class="editor-item-name">${escapeHtml(ex.name)}</span>
+      <span class="editor-item-note">${escapeHtml(ex.note)}</span>
       ${actions}
     </div>`;
   }).join('');
@@ -3330,10 +3412,10 @@ function filterRecordPicker(query) {
   if (matches.length === 0) { list.innerHTML = '<div class="picker-empty">No matches</div>'; return; }
   list.innerHTML = matches.map(ex => {
     const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
-    const safeName = ex.name.replace(/"/g, '&quot;');
+    const safeName = escapeHtml(ex.name);
     return `<div class="picker-item" data-exname="${safeName}">
-      <span class="editor-item-cat" style="background:${color}">${ex.category}</span>
-      <span>${ex.name}</span>
+      <span class="editor-item-cat" style="background:${color}">${escapeHtml(ex.category)}</span>
+      <span>${safeName}</span>
     </div>`;
   }).join('');
   list.querySelectorAll('.picker-item').forEach(el => {
@@ -3474,16 +3556,16 @@ async function loadRecordsFromDB() {
       const durM = rec.bestDur !== null ? Math.floor((rec.bestDur % 3600) / 60) : 0;
       const durS = rec.bestDur !== null ? rec.bestDur % 60 : 0;
 
-      const safeName = name.replace(/'/g, "\\'");
-      const safeCat  = (rec.category || '').replace(/'/g, "\\'");
+      const safeName = escapeHtml(name);
+      const safeCat  = escapeHtml(rec.category || '');
 
       return `${header}
         <div class="records-row" id="rec-row-${i}">
-          <span class="records-name">${name}</span>
+          <span class="records-name">${safeName}</span>
           <div class="records-badges">${badges}</div>
           <button class="record-edit-btn" title="Edit record" onclick="toggleRecordEdit(${i}, '${defaultTab}')">✏️</button>
         </div>
-        <div class="record-edit-form" id="rec-form-${i}" data-name="${name.replace(/"/g,'&quot;')}" data-cat="${rec.category || ''}">
+        <div class="record-edit-form" id="rec-form-${i}" data-name="${safeName}" data-cat="${safeCat}">
           <div class="record-edit-tabs">
             <button class="rec-tab${defaultTab==='reps'?' rec-tab-active':''}" id="rec-tab-reps-${i}" onclick="switchRecTab(${i},'reps')">Reps</button>
             <button class="rec-tab${defaultTab==='dur'?' rec-tab-active':''}"  id="rec-tab-dur-${i}"  onclick="switchRecTab(${i},'dur')">Duration</button>
@@ -3677,12 +3759,13 @@ async function renderHistory() {
     const date = new Date(y, m-1, d);
     const todaySeed = getTodaySeed();
     let label;
-    if (parseInt(dayKey) === todaySeed) label = 'Today';
+    if (parseInt(dayKey) === todaySeed) label = 'Danas';
     else {
       const yest = new Date(); yest.setDate(yest.getDate()-1);
       const ySeed = yest.getFullYear()*10000 + (yest.getMonth()+1)*100 + yest.getDate();
-      label = parseInt(dayKey) === ySeed ? 'Yesterday'
-        : date.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
+      const days = ['Ned', 'Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub'];
+      label = parseInt(dayKey) === ySeed ? 'Jučer'
+        : `${days[date.getDay()]}, ${d}.${m}.`;
     }
     const meta = `${done} done${skipped ? `, ${skipped} skipped` : ''}`;
     const entryRows = entries.map(e => {
@@ -3708,7 +3791,7 @@ async function renderHistory() {
       const editBtn = e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" onclick="editHistoryEntry(this)">edit</button>` : '';
       return `<div class="history-entry">
         <div class="log-dot history-dot" style="background:${color}"></div>
-        <span class="history-entry-name">${e.name}${skipTag}</span>
+        <span class="history-entry-name">${escapeHtml(e.name)}${skipTag}</span>
         ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
         ${editBtn}
         ${delBtn}
@@ -3876,6 +3959,12 @@ function applyCustomTemplate(name, cat) {
   document.getElementById('customName').focus();
 }
 
+function logDateSuffix(loggedAt) {
+  if (!loggedAt) return '';
+  const key = 'wbw_' + (loggedAt.getFullYear() * 10000 + (loggedAt.getMonth() + 1) * 100 + loggedAt.getDate());
+  return key === getTodayKey() ? '' : ` (${keyToLabel(key)})`;
+}
+
 function logCustomActivity() {
   const name = document.getElementById('customName').value.trim();
   if (!name) { document.getElementById('customName').focus(); return; }
@@ -3886,7 +3975,7 @@ function logCustomActivity() {
     openWorkoutModal(ex, (detail, loggedAt, _q, cancelled) => {
       if (cancelled) return;
       addToLog(ex, 'manual', detail, loggedAt);
-      notify(`✓ Logged — ${name}`);
+      notify(`✓ Logged — ${name}${logDateSuffix(loggedAt)}`);
     });
   }, 150);
 }
@@ -3911,10 +4000,10 @@ function filterPicker(query) {
   list.innerHTML = matches.map(ex => {
     const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
     const done = doneTodayNames.has(ex.name);
-    const safeName = ex.name.replace(/"/g, '&quot;');
+    const safeName = escapeHtml(ex.name);
     return `<div class="picker-item${done ? ' done-today' : ''}" data-exname="${safeName}">
-      <span class="editor-item-cat" style="background:${color}">${ex.category}</span>
-      <span>${ex.name}</span>
+      <span class="editor-item-cat" style="background:${color}">${escapeHtml(ex.category)}</span>
+      <span>${safeName}</span>
     </div>`;
   }).join('');
 
@@ -3934,7 +4023,7 @@ function selectManualExercise(name) {
       if (cancelled) return;
       addToLog(ex, 'manual', detail, loggedAt);
       if (isInQueue && shouldRemoveFromQueue) removeFromQueue(ex.name);
-      notify(`✓ Logged — ${ex.name}`);
+      notify(`✓ Logged — ${ex.name}${logDateSuffix(loggedAt)}`);
     }, null, isInQueue ? 'manual' : null);
   }, 150);
 }
@@ -3946,9 +4035,11 @@ function editLogEntry(idx) {
   openWorkoutModal(ex, (detail, loggedAt) => {
     if (!detail) return;
     entry.detail = detail;
+    let newKey = getTodayKey();
     if (loggedAt) {
       entry.time = loggedAt.getHours().toString().padStart(2,'0') + ':' + loggedAt.getMinutes().toString().padStart(2,'0');
       entry.loggedAt = loggedAt.toISOString();
+      newKey = 'wbw_' + (loggedAt.getFullYear() * 10000 + (loggedAt.getMonth() + 1) * 100 + loggedAt.getDate());
     }
     if (currentUser && entry.id) {
       sb.from('workout_log').update({
@@ -3960,9 +4051,16 @@ function editLogEntry(idx) {
       }).eq('id', entry.id).eq('user_id', currentUser.id)
         .then(() => {}).catch(e => console.error('edit log error:', e));
     }
+    if (newKey !== getTodayKey()) {
+      // Date was changed to a different day — move it out of today's live
+      // array into that day's own bucket instead of leaving it here.
+      dailyLog.splice(idx, 1);
+      saveEntryToDayKey(newKey, entry);
+      renderLogDays();
+    }
     saveState();
     renderLog();
-    notify(`✓ Updated — ${entry.name}`);
+    notify(`✓ Updated — ${entry.name}${logDateSuffix(loggedAt)}`);
   }, entry.detail);
 }
 
