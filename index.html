@@ -545,6 +545,7 @@
   .editor-header {
     display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
   }
+  .editor-header-actions { display: flex; align-items: center; gap: 10px; }
   .editor-title {
     font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
   }
@@ -652,6 +653,23 @@
     font-weight: 700;
     padding: 10px 0 4px;
     margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .editor-cat-header .editor-cat-chevron {
+    display: inline-block;
+    transition: transform 0.15s;
+    font-size: 9px;
+  }
+  .editor-cat-header.collapsed .editor-cat-chevron { transform: rotate(-90deg); }
+  .editor-cat-header .editor-cat-count {
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    opacity: 0.6;
   }
 
   /* ── Manual log picker ── */
@@ -1183,7 +1201,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.66</div>
+    <div class="app-version">v0.67</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1295,7 +1313,11 @@
 <div class="editor-section" id="editorSection" style="display:none">
   <div class="editor-header">
     <span class="editor-title">Exercise list</span>
-    <button class="log-clear" data-action="editorDone">done</button>
+    <div class="editor-header-actions">
+      <button class="log-clear" data-action="collapseAllCats">collapse all</button>
+      <button class="log-clear" data-action="expandAllCats">expand all</button>
+      <button class="log-clear" data-action="editorDone">done</button>
+    </div>
   </div>
   <div class="editor-list" id="editorList"></div>
   <div class="editor-add-row">
@@ -3524,23 +3546,44 @@ function toggleEditor() {
   else { _editingExerciseIdx = null; _confirmingDeleteIdx = null; }
 }
 
+let _collapsedCategories = new Set();
+
+function collapseAllCategories() {
+  EXERCISES.forEach(ex => _collapsedCategories.add(ex.category));
+  renderEditorList();
+}
+
+function expandAllCategories() {
+  _collapsedCategories.clear();
+  renderEditorList();
+}
+
 function renderEditorList() {
   const list = document.getElementById('editorList');
-  // Sort by BUCKET_ORDER category, then alphabetically within each
+  // Sort categories alphabetically, then exercises alphabetically within each
   const sorted = [...EXERCISES].map((ex, origIdx) => ({ ex, origIdx }))
     .sort((a, b) => {
-      const ci = BUCKET_ORDER.indexOf(a.ex.category) - BUCKET_ORDER.indexOf(b.ex.category);
+      const ci = a.ex.category.localeCompare(b.ex.category);
       return ci !== 0 ? ci : a.ex.name.localeCompare(b.ex.name);
     });
+
+  // Count how many exercises are in each category, for the header count
+  const catCounts = {};
+  sorted.forEach(({ ex }) => { catCounts[ex.category] = (catCounts[ex.category] || 0) + 1; });
 
   let lastCat = null;
   list.innerHTML = sorted.map(({ ex, origIdx }) => {
     const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
+    const collapsed = _collapsedCategories.has(ex.category);
     let header = '';
     if (ex.category !== lastCat) {
       lastCat = ex.category;
-      header = `<div class="editor-cat-header" style="color:${color}">${ex.category}</div>`;
+      header = `<div class="editor-cat-header${collapsed ? ' collapsed' : ''}" data-cat="${escapeHtml(ex.category)}" style="color:${color}">
+        <span class="editor-cat-chevron">▾</span>${ex.category}
+        <span class="editor-cat-count">${catCounts[ex.category]}</span>
+      </div>`;
     }
+    if (collapsed) return header;
 
     if (_editingExerciseIdx === origIdx) {
       const catOptions = BUCKET_ORDER.map(c => `<option ${c === ex.category ? 'selected' : ''}>${c}</option>`).join('');
@@ -3573,6 +3616,16 @@ function renderEditorList() {
       ${actions}
     </div>`;
   }).join('');
+
+  // Category headers toggle collapse/expand
+  list.querySelectorAll('.editor-cat-header').forEach(el => {
+    el.addEventListener('click', () => {
+      const cat = el.dataset.cat;
+      if (_collapsedCategories.has(cat)) _collapsedCategories.delete(cat);
+      else _collapsedCategories.add(cat);
+      renderEditorList();
+    });
+  });
 
   // Wire up the per-row buttons (CSP-safe, no inline onclick)
   list.querySelectorAll('[data-action="startEditExercise"]').forEach(btn => {
@@ -4817,6 +4870,8 @@ function bindStaticButtons() {
   $('tabCustom')  ?.addEventListener('click', () => switchPickerTab('custom'));
 
   document.querySelector('.log-clear[data-action="editorDone"]')?.addEventListener('click', toggleEditor);
+  document.querySelector('.log-clear[data-action="collapseAllCats"]')?.addEventListener('click', collapseAllCategories);
+  document.querySelector('.log-clear[data-action="expandAllCats"]')?.addEventListener('click', expandAllCategories);
 
   document.querySelector('[data-action="openRecords"]')?.addEventListener('click', openRecords);
   document.querySelector('[data-action="closeRecords"]')?.addEventListener('click', closeRecords);
