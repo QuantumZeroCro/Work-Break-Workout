@@ -618,6 +618,20 @@
   }
   .editor-confirm-del .editor-confirm-yes { background: #f43f5e; color: #fff; }
   .editor-confirm-del .editor-confirm-no { color: var(--muted); border: 1px solid var(--surface2); }
+  .editor-add-toggle {
+    width: 100%;
+    background: none;
+    border: 1px dashed #2a2d35;
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    padding: 9px;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .editor-add-toggle:hover { color: var(--text); border-color: var(--muted); }
   .editor-add-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1201,7 +1215,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.67</div>
+    <div class="app-version">v0.68</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1320,7 +1334,8 @@
     </div>
   </div>
   <div class="editor-list" id="editorList"></div>
-  <div class="editor-add-row">
+  <button class="editor-add-toggle" id="addExerciseToggle" data-action="toggleAddExercise">+ Add new exercise</button>
+  <div class="editor-add-row" id="editorAddRow" style="display:none">
     <input id="newExName" placeholder="Exercise name" />
     <select id="newExCat">
       <option>Cardio</option><option>Core</option><option>Pushing</option>
@@ -3558,6 +3573,15 @@ function expandAllCategories() {
   renderEditorList();
 }
 
+function toggleAddExercise() {
+  const row = document.getElementById('editorAddRow');
+  const toggleBtn = document.getElementById('addExerciseToggle');
+  const isOpen = row.style.display !== 'none';
+  row.style.display = isOpen ? 'none' : 'grid';
+  if (toggleBtn) toggleBtn.style.display = isOpen ? '' : 'none';
+  if (!isOpen) setTimeout(() => document.getElementById('newExName').focus(), 50);
+}
+
 function renderEditorList() {
   const list = document.getElementById('editorList');
   // Sort categories alphabetically, then exercises alphabetically within each
@@ -4829,6 +4853,7 @@ function bindStaticButtons() {
   document.querySelector('.btn-danger[data-action="confirmClearOldHistory"]')?.addEventListener('click', confirmClearOldHistory);
 
   document.querySelector('.editor-add-btn[data-action="addExercise"]')?.addEventListener('click', addExercise);
+  document.getElementById('addExerciseToggle')?.addEventListener('click', toggleAddExercise);
   document.querySelector('.editor-add-btn[data-action="logCustom"]')?.addEventListener('click', logCustomActivity);
   document.querySelector('.editor-add-btn[data-action="saveQuickPick"]')?.addEventListener('click', saveCurrentAsQuickPick);
   document.getElementById('quickPickManageBtn')?.addEventListener('click', toggleQuickPickManage);
