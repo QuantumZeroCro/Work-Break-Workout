@@ -727,6 +727,12 @@
   }
   .picker-custom-fields select:focus { border-color: var(--accent); }
   .picker-custom-fields select option { background: var(--surface2); }
+  .picker-name-row { display: flex; gap: 8px; }
+  .picker-name-row .picker-search { flex: 1; min-width: 0; }
+  #customIcon {
+    width: 48px; flex: none; text-align: center; padding: 10px 4px;
+    font-size: 18px;
+  }
 
   /* ── Custom activity templates ── */
   .custom-templates { margin-bottom: 10px; }
@@ -1177,7 +1183,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.65</div>
+    <div class="app-version">v0.66</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1470,7 +1476,10 @@
         <div class="custom-template-btns" id="quickPickBtns"></div>
       </div>
       <div class="picker-custom-fields">
-        <input class="picker-search" id="customName" placeholder="Activity name…" />
+        <div class="picker-name-row">
+          <input class="picker-search" id="customIcon" maxlength="4" placeholder="🏐" title="Icon (optional) — leave blank to use the category icon" />
+          <input class="picker-search" id="customName" placeholder="Activity name…" />
+        </div>
         <select id="customCat">
           <option>Cardio</option><option>Core</option><option>Pushing</option>
           <option>Pulling</option><option>Legs</option><option>Back</option>
@@ -4406,6 +4415,7 @@ function editQuickPick(idx) {
   const qp = QUICK_PICKS[idx];
   if (!qp) return;
   _editingQuickPickIdx = idx;
+  document.getElementById('customIcon').value = qp.icon || '';
   document.getElementById('customName').value = qp.name;
   document.getElementById('customCat').value = qp.cat;
   const saveBtn = document.getElementById('saveQuickPickBtn');
@@ -4416,6 +4426,7 @@ function editQuickPick(idx) {
 
 function exitQuickPickEdit() {
   _editingQuickPickIdx = null;
+  document.getElementById('customIcon').value = '';
   const saveBtn = document.getElementById('saveQuickPickBtn');
   if (saveBtn) saveBtn.textContent = '☆ Save as Quick Pick';
 }
@@ -4444,6 +4455,8 @@ function saveCurrentAsQuickPick() {
   const name = document.getElementById('customName').value.trim();
   if (!name) { document.getElementById('customName').focus(); return; }
   const cat = document.getElementById('customCat').value;
+  const iconInput = document.getElementById('customIcon').value.trim();
+  const icon = iconInput || CATEGORY_ICONS[cat] || '⭐';
   const dupIdx = QUICK_PICKS.findIndex(qp => qp.name.toLowerCase() === name.toLowerCase());
 
   if (_editingQuickPickIdx !== null) {
@@ -4453,7 +4466,7 @@ function saveCurrentAsQuickPick() {
       notify(`Already a quick pick — ${name}`);
       return;
     }
-    QUICK_PICKS[_editingQuickPickIdx] = { name, cat, icon: CATEGORY_ICONS[cat] || '⭐' };
+    QUICK_PICKS[_editingQuickPickIdx] = { name, cat, icon };
     saveQuickPicks();
     exitQuickPickEdit();
     document.getElementById('customName').value = '';
@@ -4466,13 +4479,15 @@ function saveCurrentAsQuickPick() {
     notify(`Already a quick pick — ${name}`);
     return;
   }
-  QUICK_PICKS.push({ name, cat, icon: CATEGORY_ICONS[cat] || '⭐' });
+  QUICK_PICKS.push({ name, cat, icon });
   saveQuickPicks();
+  document.getElementById('customIcon').value = '';
   renderQuickPicks();
   notify(`☆ Added to Quick Pick — ${name}`);
 }
 
 function applyCustomTemplate(name, cat) {
+  document.getElementById('customIcon').value = '';
   document.getElementById('customName').value = name;
   document.getElementById('customCat').value = cat;
   document.getElementById('customName').focus();
