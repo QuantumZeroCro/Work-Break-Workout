@@ -13,7 +13,7 @@
   SUPABASE_KEY: sb_publishable_* (safe for frontend — not service_role)
 
   RLS: ENABLED & VERIFIED ✓ (2025-06-29)
-  Tables: workout_log, personal_records
+  Tables: workout_log, personal_records, user_exercises
   Policies: 4 per table (SELECT / INSERT / UPDATE / DELETE)
   Role: authenticated only (not public)
   Condition: auth.uid() = user_id on all policies
@@ -730,11 +730,24 @@
 
   /* ── Custom activity templates ── */
   .custom-templates { margin-bottom: 10px; }
+  .custom-templates-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
   .custom-templates-label {
     font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--muted); margin-bottom: 6px;
+    color: var(--muted); margin: 0;
   }
+  .quickpick-manage-btn {
+    background: none; border: none; color: var(--muted); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; padding: 2px 6px;
+  }
+  .quickpick-manage-btn.active { color: var(--accent); }
   .custom-template-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .qp-item { display: inline-flex; align-items: center; gap: 3px; }
+  .qp-item.qp-editing .custom-template-btn { border-color: var(--accent); color: var(--accent2); }
+  .qp-del-btn {
+    background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #ef4444;
+    border-radius: 50%; width: 20px; height: 20px; font-size: 13px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0;
+  }
   .custom-template-btn {
     background: var(--surface2);
     border: 1px solid var(--surface2);
@@ -1164,7 +1177,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.60</div>
+    <div class="app-version">v0.64</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1287,6 +1300,11 @@
       <option>Mobility</option><option>Grip</option><option>Skill</option>
     </select>
     <input id="newExNote" class="editor-full-row" placeholder="Note (optional)" />
+    <div class="editor-full-row" style="font-size:11px;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;margin-top:2px;">Default log type</div>
+    <div class="modal-type-toggle editor-full-row" id="newExTypeToggle">
+      <button type="button" class="modal-type-btn active" data-type="reps">Reps</button>
+      <button type="button" class="modal-type-btn" data-type="duration">Duration</button>
+    </div>
     <button class="editor-add-btn" data-action="addExercise">+ Add exercise</button>
   </div>
 </div>
@@ -1320,7 +1338,7 @@
     <div class="modal-header">
       <h3>Personal Records</h3>
       <div style="display:flex;align-items:center;gap:8px;">
-        <button class="btn-ghost" style="font-size:12px;padding:4px 10px;" onclick="openRecordPicker()">+ Add</button>
+        <button class="btn-ghost" style="font-size:12px;padding:4px 10px;" data-action="openRecordPicker">+ Add</button>
         <button class="btn-modal-close" aria-label="Close records" data-action="closeRecords">×</button>
       </div>
     </div>
@@ -1389,7 +1407,7 @@
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn-ghost btn-modal-skip" id="modalSkipBtn">Skip logging</button>
+      <button class="btn-ghost btn-modal-skip" id="modalSkipBtn" title="Marks the exercise done without reps/duration — different from the main Skip button, which doesn't log anything">Save without details</button>
       <button class="btn-done btn-modal-save" id="modalSaveBtn">Save</button>
     </div>
   </div>
@@ -1400,11 +1418,11 @@
   <div class="modal">
     <div class="modal-header">
       <h3>Add record</h3>
-      <button class="btn-modal-close" onclick="closeRecordPicker()">×</button>
+      <button class="btn-modal-close">×</button>
     </div>
     <div class="picker-tabs">
-      <button class="picker-tab active" id="recPickerTabList" onclick="switchRecordPickerTab('list')">From list</button>
-      <button class="picker-tab" id="recPickerTabCustom" onclick="switchRecordPickerTab('custom')">Custom</button>
+      <button class="picker-tab active" id="recPickerTabList">From list</button>
+      <button class="picker-tab" id="recPickerTabCustom">Custom</button>
     </div>
     <div id="recPickerPanelList">
       <input class="picker-search" id="recPickerSearch" placeholder="Search exercises…" />
@@ -1419,7 +1437,7 @@
           <option>Mobility</option><option>Grip</option><option>Skill</option>
         </select>
       </div>
-      <button class="editor-add-btn" onclick="selectRecordCustom()">Continue</button>
+      <button class="editor-add-btn" data-action="selectRecordCustom">Continue</button>
     </div>
   </div>
 </div>
@@ -1445,17 +1463,11 @@
     <!-- Custom activity -->
     <div id="pickerPanelCustom" style="display:none">
       <div class="custom-templates">
-        <div class="custom-templates-label">Quick pick</div>
-        <div class="custom-template-btns">
-          <button class="custom-template-btn" data-name="Volleyball" data-cat="Cardio">🏐 Volleyball</button>
-          <button class="custom-template-btn" data-name="Padel" data-cat="Cardio">🎾 Padel</button>
-          <button class="custom-template-btn" data-name="Running" data-cat="Cardio">🏃 Running</button>
-          <button class="custom-template-btn" data-name="Sprint" data-cat="Cardio">⚡ Sprint</button>
-          <button class="custom-template-btn" data-name="Cycling" data-cat="Cardio">🚴 Cycling</button>
-          <button class="custom-template-btn" data-name="Walking" data-cat="Cardio">🚶 Walking</button>
-          <button class="custom-template-btn" data-name="Hiking" data-cat="Cardio">🥾 Hiking</button>
-          <button class="custom-template-btn" data-name="Swimming" data-cat="Cardio">🏊 Swimming</button>
+        <div class="custom-templates-label-row">
+          <div class="custom-templates-label">Quick pick</div>
+          <button type="button" class="quickpick-manage-btn" id="quickPickManageBtn">Manage</button>
         </div>
+        <div class="custom-template-btns" id="quickPickBtns"></div>
       </div>
       <div class="picker-custom-fields">
         <input class="picker-search" id="customName" placeholder="Activity name…" />
@@ -1466,6 +1478,7 @@
         </select>
       </div>
       <button class="editor-add-btn" data-action="logCustom">Log activity</button>
+      <button class="editor-add-btn btn-ghost" id="saveQuickPickBtn" data-action="saveQuickPick">☆ Save as Quick Pick</button>
     </div>
   </div>
 </div>
@@ -1476,10 +1489,33 @@
 // ── Supabase ──
 const SUPABASE_URL = 'https://rzzbffxmtkzatinpjmxt.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_cTyFG-rSNn3MLazHPOy4iQ_Z51Zz4oU';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// The Supabase JS library loads from a CDN (see <script> tag in <head>). If that
+// request fails — no connection, blocked CDN, etc. — `supabase` never gets defined,
+// and calling .createClient() on it would throw and halt the rest of this script,
+// taking the whole app down with it (including the boot code at the bottom that
+// wires up every button). Guard it so a failed CDN load degrades to a clear error
+// message instead of a silently blank page.
+let sb = null;
+let _supabaseLoadFailed = false;
+try {
+  if (typeof supabase === 'undefined') throw new Error('Supabase library did not load');
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} catch(e) {
+  console.error('Supabase init failed — app will run in a degraded, sign-in-unavailable state:', e);
+  _supabaseLoadFailed = true;
+}
 let currentUser = null;
 
 async function initAuth() {
+  if (_supabaseLoadFailed) {
+    document.getElementById('authScreen').style.display = 'flex';
+    const errEl = document.getElementById('authError');
+    errEl.style.color = '#f43f5e';
+    errEl.textContent = 'Could not load required libraries. Check your connection and reload the page.';
+    errEl.style.display = 'block';
+    return;
+  }
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
@@ -1566,6 +1602,13 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
   const password = document.getElementById('authPassword').value;
   const errEl = document.getElementById('authError');
   errEl.style.display = 'none';
+
+  if (_supabaseLoadFailed) {
+    errEl.style.color = '#f43f5e';
+    errEl.textContent = 'Could not load required libraries. Check your connection and reload the page.';
+    errEl.style.display = 'block';
+    return;
+  }
 
   if (authMode === 'reset') {
     if (!email) { errEl.style.color = '#f43f5e'; errEl.textContent = 'Please enter your email.'; errEl.style.display = 'block'; return; }
@@ -1743,9 +1786,7 @@ async function loadLogsFromDB() {
   if (!currentUser) return null;
   try {
     // Use local date seed so users in any timezone see their own day correctly
-    const _seed = getTodaySeed();
-    const _ty = Math.floor(_seed / 10000), _tm = Math.floor((_seed % 10000) / 100), _td = _seed % 100;
-    const today = new Date(_ty, _tm - 1, _td, 0, 0, 0, 0);
+    const today = getTodayLocalMidnight();
     const { data, error } = await sb.from('workout_log')
       .select('*')
       .eq('user_id', currentUser.id)
@@ -1840,13 +1881,13 @@ const DEFAULT_EXERCISES = [
   { name: "Jumping Jacks",            category: "Cardio",     note: "Full power, until failure" },
   { name: "Mountain Climbers",        category: "Cardio",     note: "Drive those knees in fast" },
   { name: "Stair Climbing",            category: "Cardio",     note: "Up and down fast, until failure" },
-  { name: "World's Greatest Stretch", category: "Mobility",   note: "Hold 30s each side" },
+  { name: "World's Greatest Stretch", category: "Mobility",   note: "Hold 30s each side", type: "duration" },
   { name: "Cat Cow",                  category: "Mobility",   note: "Slow, breathe through it" },
-  { name: "Dead Hang",                category: "Grip",       note: "Hold as long as possible" },
+  { name: "Dead Hang",                category: "Grip",       note: "Hold as long as possible", type: "duration" },
   { name: "Pull Ups",                 category: "Pulling",    note: "Max reps" },
-  { name: "Pull Up Hold",             category: "Pulling",    note: "Hold at top, chin over bar" },
+  { name: "Pull Up Hold",             category: "Pulling",    note: "Hold at top, chin over bar", type: "duration" },
   { name: "Chin Ups",                 category: "Pulling",    note: "Max reps, supinated grip" },
-  { name: "Chin Up Hold",             category: "Pulling",    note: "Hold at top position" },
+  { name: "Chin Up Hold",             category: "Pulling",    note: "Hold at top position", type: "duration" },
   { name: "Hand Grip",                category: "Grip",       note: "50 reps each hand" },
   { name: "Overhead Press",           category: "Pushing",    note: "Full range, controlled" },
   { name: "Triceps Extension",        category: "Pushing",    note: "Slow on the way down" },
@@ -1855,29 +1896,29 @@ const DEFAULT_EXERCISES = [
   { name: "Calf Raises",              category: "Legs",       note: "Slow eccentric, max range" },
   { name: "Glute Bridge",             category: "Legs",       note: "Squeeze at top, hold 1s" },
   { name: "Bridge",                   category: "Core",       note: "10 reps, slow and controlled" },
-  { name: "Deep Squat Hold",          category: "Mobility",   note: "Hold as long as possible" },
-  { name: "Wall Sit",                 category: "Legs",       note: "Hold until failure, 90°" },
+  { name: "Deep Squat Hold",          category: "Mobility",   note: "Hold as long as possible", type: "duration" },
+  { name: "Wall Sit",                 category: "Legs",       note: "Hold until failure, 90°", type: "duration" },
   { name: "Bicycle Crunches",         category: "Core",       note: "Slow and deliberate" },
   { name: "Standing Bicycle Crunches",category: "Core",       note: "Drive elbow to knee" },
   { name: "Lying Leg Raise",          category: "Core",       note: "Lower back pressed down" },
   { name: "Sit Ups",                  category: "Core",       note: "Full range of motion" },
   { name: "Russian Twist",            category: "Core",       note: "Feet off ground, rotate fully" },
   { name: "Side Bridge",              category: "Core",       note: "25 each side, stay tight" },
-  { name: "Plank",                    category: "Core",       note: "Hold as long as possible" },
+  { name: "Plank",                    category: "Core",       note: "Hold as long as possible", type: "duration" },
   { name: "Side Bend",                category: "Core",       note: "15 each side, slow" },
   { name: "Push Ups",                 category: "Pushing",    note: "Max reps, chest to floor" },
-  { name: "Handstand",                category: "Skill",      note: "Hold against wall, 30s" },
+  { name: "Handstand",                category: "Skill",      note: "Hold against wall, 30s", type: "duration" },
   { name: "Back Extension",           category: "Back",       note: "Hold at top 1s each rep" },
   { name: "Superman",                 category: "Back",       note: "Hold 2s at top" },
-  { name: "Cobra Stretch",            category: "Mobility",   note: "Hold 30s, breathe" },
-  { name: "Butterfly Stretch",        category: "Mobility",   note: "Hold 30s, press knees down" },
-  { name: "Splits",                   category: "Mobility",   note: "Hold 30s, go as far as you can" },
-  { name: "90/90 Hip Stretch",        category: "Mobility",   note: "Hold 30s each side" },
-  { name: "Lying Stretch Twist",      category: "Mobility",   note: "60s total, both sides" },
+  { name: "Cobra Stretch",            category: "Mobility",   note: "Hold 30s, breathe", type: "duration" },
+  { name: "Butterfly Stretch",        category: "Mobility",   note: "Hold 30s, press knees down", type: "duration" },
+  { name: "Splits",                   category: "Mobility",   note: "Hold 30s, go as far as you can", type: "duration" },
+  { name: "90/90 Hip Stretch",        category: "Mobility",   note: "Hold 30s each side", type: "duration" },
+  { name: "Lying Stretch Twist",      category: "Mobility",   note: "60s total, both sides", type: "duration" },
   { name: "Pike Push Up",             category: "Pushing",    note: "Max reps, hips high" },
   { name: "Reverse Nordic Curl",        category: "Legs",       note: "Kneel, lean forward as slow as you can" },
   { name: "Neck CARs",                category: "Mobility",   note: "5 slow circles each direction" },
-  { name: "Hollow Body Hold",         category: "Core",       note: "Hold as long as possible, lower back flat" },
+  { name: "Hollow Body Hold",         category: "Core",       note: "Hold as long as possible, lower back flat", type: "duration" },
   { name: "Bicep Curl",               category: "Pulling",    note: "Max reps, full range, slow eccentric" },
 ];
 
@@ -1905,9 +1946,28 @@ const EXERCISE_MIGRATIONS = [
       return exercises.filter(e => e.name !== 'Twist');
     }
   },
-  // Add future migrations here, e.g.:
+  {
+    version: 3,
+    description: 'Set default log type: isometric holds and timed stretches default to duration, everything else stays reps',
+    apply(exercises) {
+      const durationNames = new Set([
+        "World's Greatest Stretch", "Dead Hang", "Pull Up Hold", "Chin Up Hold",
+        "Deep Squat Hold", "Wall Sit", "Plank", "Handstand", "Cobra Stretch",
+        "Butterfly Stretch", "Splits", "90/90 Hip Stretch", "Lying Stretch Twist",
+        "Hollow Body Hold"
+      ]);
+      exercises.forEach(e => {
+        if (durationNames.has(e.name) && e.type === undefined) {
+          e.type = 'duration';
+        }
+      });
+      return exercises;
+    }
+  },
+  // Add future migrations here — remember to bump the version number each
+  // time (it must be higher than every migration above it, currently 3), e.g.:
   // {
-  //   version: 3,
+  //   version: 4,
   //   description: 'Add Archer Push Up to Pushing',
   //   apply(exercises) {
   //     if (!exercises.find(e => e.name === 'Archer Push Up')) {
@@ -1975,6 +2035,9 @@ function saveExercises() {
 // Debounced DB push: rapid edits (e.g. typing in the rename form before Save) shouldn't
 // each fire a separate request — only the final state after a short pause gets synced.
 let _exercisesSyncTimer = null;
+let _quickPicksSyncTimer = null;
+let _lastTypeSyncTimer = null;
+let _queueSettingsSyncTimer = null;
 function syncExercisesToDB() {
   if (!currentUser) return; // local-only until signed in; loadExercisesFromDB will merge on next sign-in
   clearTimeout(_exercisesSyncTimer);
@@ -2025,6 +2088,133 @@ const CATEGORY_COLORS = {
   Pulling: "#8b5cf6", Pushing: "#3b82f6", Legs: "#06b6d4",
   Core: "#ec4899", Back: "#f97316", Skill: "#a78bfa"
 };
+
+function syncQuickPicksToDB() {
+  if (!currentUser) return;
+  clearTimeout(_quickPicksSyncTimer);
+  _quickPicksSyncTimer = setTimeout(async () => {
+    try {
+      const { error } = await sb.from('user_exercises').upsert({
+        user_id: currentUser.id,
+        quick_picks: QUICK_PICKS,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      if (error) console.error('syncQuickPicksToDB error:', error);
+    } catch(e) { console.error('syncQuickPicksToDB exception:', e); }
+  }, 400);
+}
+
+async function loadQuickPicksFromDB() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await sb.from('user_exercises')
+      .select('quick_picks')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (error) { console.error('loadQuickPicksFromDB error:', error); return; }
+    if (data?.quick_picks && Array.isArray(data.quick_picks) && data.quick_picks.length) {
+      QUICK_PICKS = data.quick_picks;
+      try { localStorage.setItem('wbw_quickpicks', JSON.stringify(QUICK_PICKS)); } catch(e) {}
+      renderQuickPicks();
+    } else {
+      syncQuickPicksToDB(); // no row yet for this user — push local list as the starting point
+    }
+  } catch(e) { console.error('loadQuickPicksFromDB exception:', e); }
+}
+
+function syncLastLoggedTypeToDB() {
+  if (!currentUser) return;
+  clearTimeout(_lastTypeSyncTimer);
+  _lastTypeSyncTimer = setTimeout(async () => {
+    try {
+      const { error } = await sb.from('user_exercises').upsert({
+        user_id: currentUser.id,
+        last_logged_type: lastLoggedType,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      if (error) console.error('syncLastLoggedTypeToDB error:', error);
+    } catch(e) { console.error('syncLastLoggedTypeToDB exception:', e); }
+  }, 400);
+}
+
+async function loadLastLoggedTypeFromDB() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await sb.from('user_exercises')
+      .select('last_logged_type')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (error) { console.error('loadLastLoggedTypeFromDB error:', error); return; }
+    if (data?.last_logged_type && typeof data.last_logged_type === 'object') {
+      // Merge rather than overwrite, so anything logged locally before this
+      // finished loading isn't lost
+      lastLoggedType = { ...lastLoggedType, ...data.last_logged_type };
+      try { localStorage.setItem('wbw_last_type', JSON.stringify(lastLoggedType)); } catch(e) {}
+    }
+  } catch(e) { console.error('loadLastLoggedTypeFromDB exception:', e); }
+}
+
+// Combined sync for today's queue position (currentIdx/streak/skips) and app
+// settings (interval/shuffle) — both live in the same saveState() write, so
+// one debounced upsert covers both instead of firing two DB calls per save.
+function syncQueueAndSettingsToDB(settingsData) {
+  if (!currentUser) return;
+  clearTimeout(_queueSettingsSyncTimer);
+  _queueSettingsSyncTimer = setTimeout(async () => {
+    try {
+      const { error } = await sb.from('user_exercises').upsert({
+        user_id: currentUser.id,
+        queue_state: { date: getTodayKey(), currentIdx, streak, skippedToday: [...skippedToday] },
+        settings: settingsData,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      if (error) console.error('syncQueueAndSettingsToDB error:', error);
+    } catch(e) { console.error('syncQueueAndSettingsToDB exception:', e); }
+  }, 400);
+}
+
+async function loadSettingsFromDB() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await sb.from('user_exercises')
+      .select('settings')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (error) { console.error('loadSettingsFromDB error:', error); return; }
+    const s = data?.settings;
+    if (s) {
+      if (s.intervalMinutes) {
+        intervalMinutes = s.intervalMinutes;
+        document.getElementById('intervalSlider').value = intervalMinutes;
+        document.getElementById('intervalVal').textContent = intervalMinutes + ' min';
+      }
+      if (s.shuffle !== undefined) {
+        document.getElementById('shuffleCheck').checked = s.shuffle;
+      }
+      try { localStorage.setItem('wbw_settings', JSON.stringify(s)); } catch(e) {}
+    }
+  } catch(e) { console.error('loadSettingsFromDB exception:', e); }
+}
+
+// Only applies the DB's queue position if it's for *today* — otherwise it's
+// left over from a previous day and today's freshly-built queue should stand.
+async function loadQueueStateFromDB() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await sb.from('user_exercises')
+      .select('queue_state')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (error) { console.error('loadQueueStateFromDB error:', error); return; }
+    const qs = data?.queue_state;
+    if (qs && qs.date === getTodayKey()) {
+      if (typeof qs.currentIdx === 'number') currentIdx = qs.currentIdx;
+      if (typeof qs.streak === 'number') streak = qs.streak;
+      if (Array.isArray(qs.skippedToday)) skippedToday = new Set(qs.skippedToday);
+      document.getElementById('statDone').textContent = streak;
+    }
+  } catch(e) { console.error('loadQueueStateFromDB exception:', e); }
+}
 
 let queue = [];
 let currentIdx = 0;
@@ -2194,6 +2384,18 @@ function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, ch => _escapeHtmlMap[ch]);
 }
 
+// Look up an exercise by name in the current list. Used when re-opening the
+// workout modal for an existing log entry, so it can preserve fields like
+// `type` (reps vs duration) — reconstructing a bare {name, category} object
+// instead loses `type` and can make the modal default to the wrong tab (e.g.
+// Reps instead of Duration for a duration exercise like Plank) for entries
+// that don't have a detail to infer it from. Falls back to a minimal
+// stand-in for entries whose exercise was since renamed/deleted, or that
+// were a one-off custom/manual activity that was never in the list.
+function findExerciseOrFallback(name, category) {
+  return EXERCISES.find(e => e.name === name) || { name, category, note: '' };
+}
+
 // ── localStorage helpers ──
 // TODAY_KEY used to be a const computed once at page load, which meant a tab
 // left open across midnight kept writing under yesterday's key. getTodayKey()
@@ -2210,10 +2412,12 @@ function saveState() {
       skippedToday: [...skippedToday]
     }));
     const shuffleEl = document.getElementById('shuffleCheck');
-    localStorage.setItem('wbw_settings', JSON.stringify({
+    const settingsData = {
       intervalMinutes,
       shuffle: shuffleEl ? shuffleEl.checked : true
-    }));
+    };
+    localStorage.setItem('wbw_settings', JSON.stringify(settingsData));
+    syncQueueAndSettingsToDB(settingsData);
   } catch(e) {
     if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
       console.warn('localStorage quota exceeded — state not saved. Try clearing old history.');
@@ -2253,6 +2457,23 @@ function loadState() {
   } catch(e) { console.error('loadState error:', e); }
 }
 
+// Remembers whether you last logged reps or duration for each exercise, so
+// ambiguous ones (Jumping Jacks, Mountain Climbers…) open on the right tab
+// without needing a fixed per-exercise setting. Takes priority over the
+// exercise's configured default type once you've logged it at least once.
+let lastLoggedType = (() => {
+  try {
+    const raw = localStorage.getItem('wbw_last_type');
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return {};
+})();
+
+function saveLastLoggedType() {
+  try { localStorage.setItem('wbw_last_type', JSON.stringify(lastLoggedType)); } catch(e) {}
+  syncLastLoggedTypeToDB();
+}
+
 function addToLog(ex, how, detail, loggedAt) {
   const now = loggedAt || new Date();
   const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
@@ -2261,6 +2482,10 @@ function addToLog(ex, how, detail, loggedAt) {
 
   // Personal records aren't day-scoped, so update the cache either way
   if (detail) updateRecordCache(ex.name, detail);
+  if (detail) {
+    lastLoggedType[ex.name] = ('duration_seconds' in detail) ? 'duration' : 'reps';
+    saveLastLoggedType();
+  }
   syncLogToDB(entry);
 
   if (targetKey === getTodayKey()) {
@@ -2336,10 +2561,14 @@ function renderLogDays() {
       const raw = localStorage.getItem(key);
       if (raw) count = (JSON.parse(raw).log || []).filter(e => e.how !== 'skip').length;
     } catch(e) {}
-    return `<button class="log-day-tab${key === viewingDay ? ' active' : ''}" onclick="switchDay('${key}')">
+    return `<button class="log-day-tab${key === viewingDay ? ' active' : ''}" data-key="${key}">
       ${keyToLabel(key)}<span class="tab-count">${count > 0 ? count : ''}</span>
     </button>`;
   }).join('');
+  // CSP-safe: wire click handlers instead of inline onclick
+  container.querySelectorAll('.log-day-tab').forEach(btn => {
+    btn.addEventListener('click', () => switchDay(btn.dataset.key));
+  });
 }
 
 function switchDay(key) {
@@ -2412,6 +2641,7 @@ function renderLogForKey(key) {
     const color = CATEGORY_COLORS[entry.category] || '#60a5fa';
     const skipped = entry.how === 'skip';
     const isManual = entry.how === 'manual';
+    const isRepeat = entry.how === 'repeat';
     const d = entry.detail;
 
     let detailHtml = '';
@@ -2431,14 +2661,15 @@ function renderLogForKey(key) {
     }
     const skipTag = skipped ? '<span class="tag-badge">skipped</span>' : '';
     const manualTag = isManual ? '<span class="tag-badge">manual</span>' : '';
-    const editBtn = !skipped ? `<button class="log-again" onclick="editLogEntryForKey('${key}', ${idx})">edit</button>` : '';
-    const delBtn = `<button class="log-del" onclick="deleteLogEntryForKey('${key}', ${idx})" title="Delete">×</button>`;
+    const repeatTag = isRepeat ? '<span class="tag-badge" title="Kept in queue to do again today">repeat</span>' : '';
+    const editBtn = !skipped ? `<button class="log-again" data-idx="${idx}" data-role="edit">edit</button>` : '';
+    const delBtn = `<button class="log-del" data-idx="${idx}" data-role="delete" title="Delete">×</button>`;
 
     return `<div class="log-item">
       <div class="log-item-left">
         <div class="log-dot" style="background:${color}"></div>
         <span class="log-name">${escapeHtml(entry.name)}</span>
-        ${skipTag}${manualTag}${detailHtml}${editBtn}
+        ${skipTag}${manualTag}${repeatTag}${detailHtml}${editBtn}
       </div>
       <div class="log-item-right">
         <span class="log-time">${entry.time}</span>
@@ -2446,6 +2677,14 @@ function renderLogForKey(key) {
       </div>
     </div>`;
   }).join('');
+
+  // CSP-safe: wire click handlers instead of inline onclick
+  list.querySelectorAll('[data-role="edit"]').forEach(btn => {
+    btn.addEventListener('click', () => editLogEntryForKey(key, parseInt(btn.dataset.idx)));
+  });
+  list.querySelectorAll('[data-role="delete"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteLogEntryForKey(key, parseInt(btn.dataset.idx)));
+  });
 }
 
 function showResetConfirm() {
@@ -2490,17 +2729,36 @@ async function confirmReset() {
   await resetDay();
 }
 
+// Shared by resetDay() and clearLog() — deletes all of today's DB log rows.
+async function deleteTodaysLogsFromDB() {
+  if (!currentUser) return;
+  try {
+    const today = getTodayLocalMidnight();
+    await sb.from('workout_log')
+      .delete()
+      .eq('user_id', currentUser.id)
+      .gte('logged_at', today.toISOString());
+  } catch(e) { console.error('delete today logs error:', e); }
+}
+
+// Shared by resetDay() and clearLog(). Both functions rebuild the queue, which
+// resets currentIdx and can change which exercise is "current" — if a session
+// is actively counting down at that moment, the countdown would keep running
+// toward whatever swapped in, disconnected from what's actually displayed. So
+// stop it first.
+function stopActiveSession() {
+  clearInterval(timerInterval);
+  sessionActive = false;
+  document.getElementById('btnDone').disabled = true;
+  document.getElementById('btnSkip').disabled = true;
+  document.getElementById('ringTime').textContent = 'START';
+  document.getElementById('ringLabel').textContent = 'ready to go';
+  document.getElementById('ringSubLabel').textContent = 'press start';
+  updateRingClickability();
+}
+
 async function resetDay() {
-  // Delete today's logs from Supabase
-  if (currentUser) {
-    try {
-      const today = getTodayLocalMidnight();
-      await sb.from('workout_log')
-        .delete()
-        .eq('user_id', currentUser.id)
-        .gte('logged_at', today.toISOString());
-    } catch(e) { console.error('reset error:', e); }
-  }
+  await deleteTodaysLogsFromDB();
 
   // Clear local state
   dailyLog = [];
@@ -2510,10 +2768,7 @@ async function resetDay() {
   document.getElementById('statDone').textContent = 0;
   saveState();
 
-  clearInterval(timerInterval);
-  sessionActive = false;
-  document.getElementById('btnDone').disabled = true;
-  document.getElementById('btnSkip').disabled = true;
+  stopActiveSession();
 
   rebuildQueue();
   syncQueueWithLog();
@@ -2521,26 +2776,12 @@ async function resetDay() {
   renderQueue();
   updateDayProgress();
   renderLog();
-  // Reset ring to START state
-  document.getElementById('ringTime').textContent = 'START';
-  document.getElementById('ringLabel').textContent = 'ready to go';
-  document.getElementById('ringSubLabel').textContent = 'press start';
-  updateRingClickability();
 
   notify('Day reset ✓');
 }
 
 async function clearLog() {
-  // Delete today's logs from Supabase
-  if (currentUser) {
-    try {
-      const today = getTodayLocalMidnight();
-      await sb.from('workout_log')
-        .delete()
-        .eq('user_id', currentUser.id)
-        .gte('logged_at', today.toISOString());
-    } catch(e) { console.error('clearLog DB error:', e); }
-  }
+  await deleteTodaysLogsFromDB();
 
   dailyLog = [];
   skippedToday = new Set();
@@ -2548,6 +2789,12 @@ async function clearLog() {
   currentIdx = 0;
   document.getElementById('statDone').textContent = 0;
   saveState();
+
+  // Stop any active session before rebuilding the queue (see stopActiveSession
+  // comment) — otherwise a running countdown can end up pointing at a
+  // different exercise than the one it started counting down for.
+  stopActiveSession();
+
   // Rebuild queue so done/skipped exercises come back
   rebuildQueue();
   syncQueueWithLog();
@@ -2633,7 +2880,7 @@ function editLogEntryForKey(key, idx) {
   const entry = log[idx];
   if (!entry) return;
 
-  const ex = { name: entry.name, category: entry.category, note: '' };
+  const ex = findExerciseOrFallback(entry.name, entry.category);
   openWorkoutModal(ex, async (detail, loggedAt) => {
     if (!detail) return;
     entry.detail = detail;
@@ -2675,7 +2922,7 @@ function editLogEntryForKey(key, idx) {
 
     notify(`✓ Updated — ${entry.name}${logDateSuffix(loggedAt)}`);
     renderLog();
-  }, entry.detail);
+  }, { ...entry.detail, loggedAt: entry.loggedAt });
 }
 
 function doneExercise() {
@@ -2717,7 +2964,13 @@ function doneExercise() {
     }
 
     notify(`✓ Done — ${ex.name}`);
-    addToLog(ex, 'done', detail, loggedAt);
+    // Use a distinct 'repeat' how-value when the exercise is kept in the queue
+    // (do again later today) — 'done'/'manual' entries are what tell
+    // syncQueueWithLog() an exercise is finished for the day and safe to drop
+    // from the queue on reload/resync. Logging this as plain 'done' would get
+    // it stripped from the queue the next time that reconciliation runs, even
+    // though the user explicitly asked to do it again.
+    addToLog(ex, shouldRemoveFromQueue ? 'done' : 'repeat', detail, loggedAt);
 
     if (shouldRemoveFromQueue) {
       currentIdx++;
@@ -2805,30 +3058,66 @@ function subscribeRealtime() {
       table: 'workout_log',
       filter: `user_id=eq.${currentUser.id}`
     }, (payload) => {
-      // Another device logged an exercise — sync state
+      // Another device (or this same device, backdated) logged an exercise
       const r = payload.new;
+      if (r.how === 'record') return;
+      const loggedAtDate = new Date(r.logged_at);
       const entry = {
         id: r.id,
         name: r.exercise_name,
         category: r.category,
-        time: new Date(r.logged_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        time: loggedAtDate.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
         how: r.how,
         loggedAt: r.logged_at,
         detail: (r.reps || r.sets || r.weight || r.duration_seconds)
           ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
           : null
       };
+
+      const targetKey = 'wbw_' + (loggedAtDate.getFullYear() * 10000 + (loggedAtDate.getMonth() + 1) * 100 + loggedAtDate.getDate());
+
+      if (targetKey !== getTodayKey()) {
+        // Backdated entry (from this device or another) — file it under its
+        // own day instead of dumping it into today's live log/queue.
+        let already = false;
+        try {
+          const raw = localStorage.getItem(targetKey);
+          const log = raw ? (JSON.parse(raw).log || []) : [];
+          already = log.some(e => e.id && e.id === entry.id);
+        } catch(e) {}
+        if (!already) {
+          saveEntryToDayKey(targetKey, entry);
+          renderLogDays();
+          if (viewingDay === targetKey) renderLogForKey(targetKey);
+        }
+        return;
+      }
+
       // Only add if not already in log, and not a record-correction row.
-      // Primary dedup by DB id; fall back to name+time only for local entries that lack an id.
+      // Primary dedup by DB id; fall back to name+loggedAt for local entries that
+      // lack an id yet (their INSERT is still in flight when this echo arrives).
+      // Compare the full loggedAt timestamp, not the rendered time string —
+      // that string is minute-precision and built differently in different code
+      // paths, so two entries logged in the same minute (or the same entry
+      // seen twice with different formatting) could wrongly look distinct.
       const alreadyLogged = dailyLog.some(e =>
         (e.id && e.id === entry.id) ||
-        (!e.id && e.name === entry.name && e.time === entry.time)
+        (!e.id && e.name === entry.name &&
+         new Date(e.loggedAt).getTime() === new Date(entry.loggedAt).getTime())
       );
-      if (!alreadyLogged && r.how !== 'record') {
+      if (!alreadyLogged) {
         dailyLog.unshift(entry);
         streak = dailyLog.filter(e => e.how !== 'skip').length;
         document.getElementById('statDone').textContent = streak;
         saveState();
+
+        // 'repeat' means the other device chose "keep in queue / do again
+        // later" — don't pull it out of our queue, just log it.
+        if (entry.how === 'repeat') {
+          renderLog();
+          notify(`Synced: ${entry.name}`);
+          return;
+        }
 
         // Check whether this is the currently queued exercise BEFORE removing it
         const currentEx = currentIdx < queue.length ? queue[currentIdx] : null;
@@ -3072,7 +3361,14 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
 
   // Determine type from prefill
   const hasDuration = prefill?.duration_seconds != null;
-  setModalType(hasDuration ? 'duration' : 'reps');
+  const hasReps = prefill?.reps != null;
+  // Prior logged data (editing an existing entry) always wins. For a fresh
+  // log: what you last picked for this exercise wins, then its configured
+  // default, then reps.
+  const remembered = ex?.name ? lastLoggedType[ex.name] : null;
+  const defaultType = hasDuration ? 'duration' : hasReps ? 'reps' :
+    (remembered || (ex?.type === 'duration' ? 'duration' : 'reps'));
+  setModalType(defaultType);
 
   if (hasDuration) {
     const s = prefill.duration_seconds;
@@ -3087,13 +3383,22 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
   }
   document.getElementById('modalSets').value = prefill?.sets || '1';
   document.getElementById('modalWeight').value = prefill?.weight || '';
-  document.getElementById('modalLogH').value = '';
-  document.getElementById('modalLogM').value = '';
   const logDateEl = document.getElementById('modalLogDate');
-  logDateEl.value = '';
   // Can't log a workout that hasn't happened yet
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
   logDateEl.max = todayStr;
+
+  if (prefill?.loggedAt) {
+    // Editing an existing entry — show its current date/time instead of blank fields
+    const d = new Date(prefill.loggedAt);
+    logDateEl.value = d.toLocaleDateString('en-CA');
+    document.getElementById('modalLogH').value = d.getHours();
+    document.getElementById('modalLogM').value = d.getMinutes().toString().padStart(2, '0');
+  } else {
+    logDateEl.value = '';
+    document.getElementById('modalLogH').value = '';
+    document.getElementById('modalLogM').value = '';
+  }
 
   document.getElementById('modalRepsWarn').style.display = 'none';
   document.getElementById('workoutModal').classList.add('open');
@@ -3222,6 +3527,10 @@ function renderEditorList() {
         <input class="ex-edit-name" value="${escapeHtml(ex.name)}" placeholder="Exercise name" />
         <select class="ex-edit-cat">${catOptions}</select>
         <input class="ex-edit-note editor-full-row" value="${escapeHtml(ex.note || '')}" placeholder="Note (optional)" />
+        <div class="modal-type-toggle editor-full-row ex-edit-type">
+          <button type="button" class="modal-type-btn${ex.type === 'duration' ? '' : ' active'}" data-type="reps">Reps</button>
+          <button type="button" class="modal-type-btn${ex.type === 'duration' ? ' active' : ''}" data-type="duration">Duration</button>
+        </div>
         <div class="editor-item-edit-actions">
           <button class="editor-item-edit-cancel" data-action="cancelEditExercise">Cancel</button>
           <button class="editor-item-edit-save" data-action="saveEditExercise" data-idx="${origIdx}">Save</button>
@@ -3263,6 +3572,12 @@ function renderEditorList() {
   list.querySelectorAll('[data-action="confirmDeleteExercise"]').forEach(btn => {
     btn.addEventListener('click', () => deleteExercise(parseInt(btn.dataset.idx)));
   });
+  list.querySelectorAll('.ex-edit-type .modal-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.parentElement.querySelectorAll('.modal-type-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
 
   // Enter submits the edit row, Escape cancels it
   const editRow = list.querySelector('.editor-item-edit-row');
@@ -3283,6 +3598,7 @@ async function saveEditExercise(idx) {
   const newName = row.querySelector('.ex-edit-name').value.trim();
   const newCat  = row.querySelector('.ex-edit-cat').value;
   const newNote = row.querySelector('.ex-edit-note').value.trim() || '—';
+  const newType = row.querySelector('.ex-edit-type .modal-type-btn.active')?.dataset.type || 'reps';
   if (!newName) { row.querySelector('.ex-edit-name').focus(); return; }
 
   const oldEx = EXERCISES[idx];
@@ -3290,7 +3606,7 @@ async function saveEditExercise(idx) {
   const oldName = oldEx.name;
   const renamed = oldName !== newName;
 
-  EXERCISES[idx] = { name: newName, category: newCat, note: newNote };
+  EXERCISES[idx] = { name: newName, category: newCat, note: newNote, type: newType };
   saveExercises();
 
   // Carry the in-memory PR over to the new name immediately so the UI is consistent
@@ -3336,8 +3652,9 @@ function addExercise() {
   const name = document.getElementById('newExName').value.trim();
   const cat = document.getElementById('newExCat').value;
   const note = document.getElementById('newExNote').value.trim() || '—';
+  const type = document.querySelector('#newExTypeToggle .modal-type-btn.active')?.dataset.type || 'reps';
   if (!name) { document.getElementById('newExName').focus(); return; }
-  const newEx = { name, category: cat, note };
+  const newEx = { name, category: cat, note, type };
   EXERCISES.push(newEx);
   saveExercises();
   document.getElementById('newExName').value = '';
@@ -3563,12 +3880,12 @@ async function loadRecordsFromDB() {
         <div class="records-row" id="rec-row-${i}">
           <span class="records-name">${safeName}</span>
           <div class="records-badges">${badges}</div>
-          <button class="record-edit-btn" title="Edit record" onclick="toggleRecordEdit(${i}, '${defaultTab}')">✏️</button>
+          <button class="record-edit-btn" title="Edit record" data-role="rec-edit" data-i="${i}" data-tab="${defaultTab}">✏️</button>
         </div>
         <div class="record-edit-form" id="rec-form-${i}" data-name="${safeName}" data-cat="${safeCat}">
           <div class="record-edit-tabs">
-            <button class="rec-tab${defaultTab==='reps'?' rec-tab-active':''}" id="rec-tab-reps-${i}" onclick="switchRecTab(${i},'reps')">Reps</button>
-            <button class="rec-tab${defaultTab==='dur'?' rec-tab-active':''}"  id="rec-tab-dur-${i}"  onclick="switchRecTab(${i},'dur')">Duration</button>
+            <button class="rec-tab${defaultTab==='reps'?' rec-tab-active':''}" id="rec-tab-reps-${i}" data-role="rec-switch-tab" data-i="${i}" data-tab="reps">Reps</button>
+            <button class="rec-tab${defaultTab==='dur'?' rec-tab-active':''}"  id="rec-tab-dur-${i}"  data-role="rec-switch-tab" data-i="${i}" data-tab="dur">Duration</button>
           </div>
           <div id="rec-reps-wrap-${i}" style="display:${defaultTab==='reps'?'flex':'none'}" class="record-edit-row">
             <label>Reps</label>
@@ -3590,11 +3907,25 @@ async function loadRecordsFromDB() {
           </div>
           <div id="rec-err-${i}" style="display:none;font-size:11px;color:#f87171;margin-top:2px;"></div>
           <div class="record-edit-actions">
-            <button class="record-edit-cancel" onclick="toggleRecordEdit(${i}, null)">Cancel</button>
-            <button class="record-edit-save" id="rec-save-${i}" onclick="saveRecordEdit(${i})">Save</button>
+            <button class="record-edit-cancel" data-role="rec-cancel" data-i="${i}">Cancel</button>
+            <button class="record-edit-save" id="rec-save-${i}" data-role="rec-save" data-i="${i}">Save</button>
           </div>
         </div>`;
     }).join('');
+
+    // CSP-safe: wire click handlers instead of inline onclick
+    list.querySelectorAll('[data-role="rec-edit"]').forEach(btn => {
+      btn.addEventListener('click', () => toggleRecordEdit(parseInt(btn.dataset.i), btn.dataset.tab));
+    });
+    list.querySelectorAll('[data-role="rec-switch-tab"]').forEach(btn => {
+      btn.addEventListener('click', () => switchRecTab(parseInt(btn.dataset.i), btn.dataset.tab));
+    });
+    list.querySelectorAll('[data-role="rec-cancel"]').forEach(btn => {
+      btn.addEventListener('click', () => toggleRecordEdit(parseInt(btn.dataset.i), null));
+    });
+    list.querySelectorAll('[data-role="rec-save"]').forEach(btn => {
+      btn.addEventListener('click', () => saveRecordEdit(parseInt(btn.dataset.i)));
+    });
   } catch(e) {
     console.error('records error:', e);
     list.innerHTML = '<div class="history-empty">Failed to load records</div>';
@@ -3786,12 +4117,13 @@ async function renderHistory() {
         detStr = parts.join(' · ');
       }
       const skipTag = e.how === 'skip' ? '<span class="tag-badge">skipped</span>' : '';
+      const repeatTag = e.how === 'repeat' ? '<span class="tag-badge" title="Kept in queue to do again that day">repeat</span>' : '';
       const entryIdx = entries.indexOf(e);
-      const delBtn = `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" onclick="deleteHistoryEntry(this)" title="Delete">×</button>`;
-      const editBtn = e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" onclick="editHistoryEntry(this)">edit</button>` : '';
+      const delBtn = `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-delete" title="Delete">×</button>`;
+      const editBtn = e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-edit">edit</button>` : '';
       return `<div class="history-entry">
         <div class="log-dot history-dot" style="background:${color}"></div>
-        <span class="history-entry-name">${escapeHtml(e.name)}${skipTag}</span>
+        <span class="history-entry-name">${escapeHtml(e.name)}${skipTag}${repeatTag}</span>
         ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
         ${editBtn}
         ${delBtn}
@@ -3799,13 +4131,24 @@ async function renderHistory() {
     }).join('');
 
     return `<div class="history-day">
-      <div class="history-day-header" onclick="toggleHistoryDay('hday-${di}')">
+      <div class="history-day-header" data-role="hist-toggle" data-target="hday-${di}">
         <span class="history-day-title">${label}</span>
         <span class="history-day-meta">${meta}</span>
       </div>
       <div class="history-day-entries${di === 0 ? ' open' : ''}" id="hday-${di}">${entryRows}</div>
     </div>`;
   }).join('');
+
+  // CSP-safe: wire click handlers instead of inline onclick
+  list.querySelectorAll('[data-role="hist-delete"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteHistoryEntry(btn));
+  });
+  list.querySelectorAll('[data-role="hist-edit"]').forEach(btn => {
+    btn.addEventListener('click', () => editHistoryEntry(btn));
+  });
+  list.querySelectorAll('[data-role="hist-toggle"]').forEach(header => {
+    header.addEventListener('click', () => toggleHistoryDay(header.dataset.target));
+  });
 }
 
 function toggleHistoryDay(id) {
@@ -3858,6 +4201,7 @@ async function editHistoryEntry(btn) {
   const dayKey = btn.dataset.daykey;
   const idx = parseInt(btn.dataset.idx);
   const isToday = parseInt(dayKey) === getTodaySeed();
+  const oldKey = 'wbw_' + dayKey;
 
   // Find the entry — from dailyLog if today, else from DB/localStorage
   let entry = null;
@@ -3872,6 +4216,7 @@ async function editHistoryEntry(btn) {
         name: data.exercise_name,
         category: data.category,
         how: data.how,
+        loggedAt: data.logged_at,
         detail: (data.reps || data.sets || data.weight || data.duration_seconds)
           ? { reps: data.reps, sets: data.sets, weight: data.weight, duration_seconds: data.duration_seconds }
           : null
@@ -3880,7 +4225,7 @@ async function editHistoryEntry(btn) {
   } else {
     // localStorage fallback
     try {
-      const raw = localStorage.getItem('wbw_' + dayKey);
+      const raw = localStorage.getItem(oldKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         entry = parsed.log?.[idx] || null;
@@ -3889,9 +4234,17 @@ async function editHistoryEntry(btn) {
   }
   if (!entry) return;
 
-  const ex = { name: entry.name, category: entry.category, note: '' };
+  const ex = findExerciseOrFallback(entry.name, entry.category);
   openWorkoutModal(ex, async (detail, loggedAt) => {
     if (!detail) return;
+
+    entry.detail = detail;
+    let newKey = oldKey;
+    if (loggedAt) {
+      entry.time = loggedAt.getHours().toString().padStart(2,'0') + ':' + loggedAt.getMinutes().toString().padStart(2,'0');
+      entry.loggedAt = loggedAt.toISOString();
+      newKey = 'wbw_' + (loggedAt.getFullYear() * 10000 + (loggedAt.getMonth() + 1) * 100 + loggedAt.getDate());
+    }
 
     // Update in Supabase
     if (currentUser && dbId) {
@@ -3901,39 +4254,53 @@ async function editHistoryEntry(btn) {
           sets: detail.sets || null,
           weight: detail.weight || null,
           duration_seconds: detail.duration_seconds || null,
-          ...(loggedAt ? { logged_at: loggedAt.toISOString() } : {})
+          ...(loggedAt ? { logged_at: entry.loggedAt } : {})
         }).eq('id', dbId).eq('user_id', currentUser.id);
       } catch(e) { console.error('editHistoryEntry save error:', e); }
     }
 
-    // Update today's in-memory log
-    if (isToday && dailyLog[idx]) {
-      dailyLog[idx].detail = detail;
-      if (loggedAt) {
-        dailyLog[idx].time = loggedAt.getHours().toString().padStart(2,'0') + ':' + loggedAt.getMinutes().toString().padStart(2,'0');
-        dailyLog[idx].loggedAt = loggedAt.toISOString();
+    if (newKey !== oldKey) {
+      // Date was changed to a different day — move the entry out of its old
+      // bucket (today's live array or that day's localStorage) into the new one.
+      if (isToday) {
+        dailyLog.splice(idx, 1);
+      } else {
+        try {
+          const raw = localStorage.getItem(oldKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.log?.[idx]) { parsed.log.splice(idx, 1); localStorage.setItem(oldKey, JSON.stringify(parsed)); }
+          }
+        } catch(e) {}
       }
+      if (newKey === getTodayKey()) {
+        dailyLog.unshift(entry);
+      } else {
+        saveEntryToDayKey(newKey, entry);
+      }
+      saveState();
+      renderLogDays();
+    } else if (isToday) {
       saveState();
       renderLog();
     } else {
-      // Update localStorage for past days
+      // Same past day — update localStorage in place
       try {
-        const key = 'wbw_' + dayKey;
-        const raw = localStorage.getItem(key);
+        const raw = localStorage.getItem(oldKey);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed.log?.[idx]) {
-            parsed.log[idx].detail = detail;
-            localStorage.setItem(key, JSON.stringify(parsed));
+            parsed.log[idx] = entry;
+            localStorage.setItem(oldKey, JSON.stringify(parsed));
           }
         }
       } catch(e) {}
     }
 
-    notify(`✓ Updated — ${entry.name}`);
+    notify(`✓ Updated — ${entry.name}${logDateSuffix(loggedAt)}`);
     // Re-render history to reflect new detail string
     renderHistory();
-  }, entry.detail);
+  }, { ...entry.detail, loggedAt: entry.loggedAt });
 }
 function openManualLog() {
   switchPickerTab('list');
@@ -3951,6 +4318,146 @@ function switchPickerTab(tab) {
   document.getElementById('tabFromList').classList.toggle('active', isList);
   document.getElementById('tabCustom').classList.toggle('active', !isList);
   if (!isList) setTimeout(() => document.getElementById('customName').focus(), 100);
+}
+
+// ── Quick Picks (Custom Activity shortcuts) ──
+// Stored locally on this device only, same as the exercise list used to be
+// before Supabase sync existed — there's no Supabase column for these yet,
+// so they won't follow you to another device. Ask me if you want that added.
+const DEFAULT_QUICK_PICKS = [
+  { name: "Volleyball", cat: "Cardio", icon: "🏐" },
+  { name: "Padel",      cat: "Cardio", icon: "🎾" },
+  { name: "Running",    cat: "Cardio", icon: "🏃" },
+  { name: "Sprint",     cat: "Cardio", icon: "⚡" },
+  { name: "Cycling",    cat: "Cardio", icon: "🚴" },
+  { name: "Walking",    cat: "Cardio", icon: "🚶" },
+  { name: "Hiking",     cat: "Cardio", icon: "🥾" },
+  { name: "Swimming",   cat: "Cardio", icon: "🏊" },
+  { name: "SPI30D",     cat: "Core",   icon: "🐷" },
+];
+
+const CATEGORY_ICONS = {
+  Cardio: '🏃', Core: '🧘', Pushing: '💪', Pulling: '🏋️',
+  Legs: '🦵', Back: '🧍', Mobility: '🤸', Grip: '✊', Skill: '🤾'
+};
+
+let QUICK_PICKS = (() => {
+  try {
+    const raw = localStorage.getItem('wbw_quickpicks');
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return [...DEFAULT_QUICK_PICKS];
+})();
+
+let quickPickEditMode = false;
+let _editingQuickPickIdx = null; // index of the quick pick currently loaded into the fields for editing, or null
+
+function saveQuickPicks() {
+  try { localStorage.setItem('wbw_quickpicks', JSON.stringify(QUICK_PICKS)); } catch(e) {}
+  syncQuickPicksToDB();
+}
+
+function renderQuickPicks() {
+  const container = document.getElementById('quickPickBtns');
+  if (!container) return;
+  container.innerHTML = QUICK_PICKS.map((qp, i) => {
+    const safeName = escapeHtml(qp.name);
+    const icon = qp.icon || '⭐';
+    if (quickPickEditMode) {
+      const editingClass = i === _editingQuickPickIdx ? ' qp-editing' : '';
+      return `<div class="qp-item${editingClass}">
+        <span class="custom-template-btn qp-apply" data-idx="${i}">${icon} ${safeName}</span>
+        <button type="button" class="qp-del-btn" data-idx="${i}" aria-label="Remove ${safeName}">×</button>
+      </div>`;
+    }
+    return `<button type="button" class="custom-template-btn qp-apply" data-idx="${i}">${icon} ${safeName}</button>`;
+  }).join('');
+
+  container.querySelectorAll('.qp-apply').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.dataset.idx);
+      const qp = QUICK_PICKS[idx];
+      if (!qp) return;
+      if (quickPickEditMode) {
+        editQuickPick(idx);
+      } else {
+        applyCustomTemplate(qp.name, qp.cat);
+      }
+    });
+  });
+  container.querySelectorAll('.qp-del-btn').forEach(el => {
+    el.addEventListener('click', () => removeQuickPick(parseInt(el.dataset.idx)));
+  });
+}
+
+function editQuickPick(idx) {
+  const qp = QUICK_PICKS[idx];
+  if (!qp) return;
+  _editingQuickPickIdx = idx;
+  document.getElementById('customName').value = qp.name;
+  document.getElementById('customCat').value = qp.cat;
+  const saveBtn = document.getElementById('saveQuickPickBtn');
+  if (saveBtn) saveBtn.textContent = '✎ Update Quick Pick';
+  renderQuickPicks();
+  document.getElementById('customName').focus();
+}
+
+function exitQuickPickEdit() {
+  _editingQuickPickIdx = null;
+  const saveBtn = document.getElementById('saveQuickPickBtn');
+  if (saveBtn) saveBtn.textContent = '☆ Save as Quick Pick';
+}
+
+function toggleQuickPickManage() {
+  quickPickEditMode = !quickPickEditMode;
+  const btn = document.getElementById('quickPickManageBtn');
+  if (btn) {
+    btn.textContent = quickPickEditMode ? 'Done' : 'Manage';
+    btn.classList.toggle('active', quickPickEditMode);
+  }
+  if (!quickPickEditMode) exitQuickPickEdit();
+  renderQuickPicks();
+}
+
+function removeQuickPick(idx) {
+  const removed = QUICK_PICKS.splice(idx, 1)[0];
+  saveQuickPicks();
+  if (_editingQuickPickIdx === idx) exitQuickPickEdit();
+  else if (_editingQuickPickIdx !== null && idx < _editingQuickPickIdx) _editingQuickPickIdx--;
+  renderQuickPicks();
+  if (removed) notify(`Removed — ${removed.name}`);
+}
+
+function saveCurrentAsQuickPick() {
+  const name = document.getElementById('customName').value.trim();
+  if (!name) { document.getElementById('customName').focus(); return; }
+  const cat = document.getElementById('customCat').value;
+  const dupIdx = QUICK_PICKS.findIndex(qp => qp.name.toLowerCase() === name.toLowerCase());
+
+  if (_editingQuickPickIdx !== null) {
+    // Updating an existing quick pick — allow keeping its own name, but not
+    // colliding with a different one.
+    if (dupIdx !== -1 && dupIdx !== _editingQuickPickIdx) {
+      notify(`Already a quick pick — ${name}`);
+      return;
+    }
+    QUICK_PICKS[_editingQuickPickIdx] = { name, cat, icon: CATEGORY_ICONS[cat] || '⭐' };
+    saveQuickPicks();
+    exitQuickPickEdit();
+    document.getElementById('customName').value = '';
+    renderQuickPicks();
+    notify(`✎ Updated Quick Pick — ${name}`);
+    return;
+  }
+
+  if (dupIdx !== -1) {
+    notify(`Already a quick pick — ${name}`);
+    return;
+  }
+  QUICK_PICKS.push({ name, cat, icon: CATEGORY_ICONS[cat] || '⭐' });
+  saveQuickPicks();
+  renderQuickPicks();
+  notify(`☆ Added to Quick Pick — ${name}`);
 }
 
 function applyCustomTemplate(name, cat) {
@@ -3987,9 +4494,10 @@ function closeManualLog() {
 
 function filterPicker(query) {
   const q = query.toLowerCase();
-  // Names already done today (logged as 'done' or 'manual')
+  // Names already done today (logged as 'done', 'manual', or 'repeat' — 'repeat'
+  // means done-but-kept-in-queue, which still counts as done for this indicator)
   const doneTodayNames = new Set(
-    dailyLog.filter(e => e.how === 'done' || e.how === 'manual').map(e => e.name)
+    dailyLog.filter(e => e.how === 'done' || e.how === 'manual' || e.how === 'repeat').map(e => e.name)
   );
   const matches = EXERCISES.filter(e => !q || e.name.toLowerCase().includes(q));
   const list = document.getElementById('pickerList');
@@ -4031,7 +4539,7 @@ function selectManualExercise(name) {
 function editLogEntry(idx) {
   const entry = dailyLog[idx];
   if (!entry) return;
-  const ex = { name: entry.name, category: entry.category, note: '' };
+  const ex = findExerciseOrFallback(entry.name, entry.category);
   openWorkoutModal(ex, (detail, loggedAt) => {
     if (!detail) return;
     entry.detail = detail;
@@ -4061,7 +4569,7 @@ function editLogEntry(idx) {
     saveState();
     renderLog();
     notify(`✓ Updated — ${entry.name}${logDateSuffix(loggedAt)}`);
-  }, entry.detail);
+  }, { ...entry.detail, loggedAt: entry.loggedAt });
 }
 
 function removeFromQueue(name) {
@@ -4081,7 +4589,11 @@ function removeFromQueue(name) {
 }
 
 function syncQueueWithLog() {
-  // Remove from queue any exercise already logged today as 'done' or 'manual'
+  // Remove from queue any exercise already logged today as 'done' or 'manual'.
+  // Deliberately excludes 'repeat' (an exercise logged via "keep in queue / do
+  // again later") — those should still come back around in the queue. If the
+  // same exercise later gets a real 'done'/'manual' entry, it'll be picked up
+  // and removed then.
   const doneNames = new Set(
     dailyLog.filter(e => e.how === 'done' || e.how === 'manual').map(e => e.name)
   );
@@ -4118,9 +4630,16 @@ function syncQueueWithLog() {
 // ── Init (called after auth) ──
 async function initApp() {
   loadSettings();
-  await loadExercisesFromDB(); // sync custom exercise list before building today's queue
+  // Settings and exercises can both affect how today's queue gets built
+  // (shuffle toggle, exercise list) so both need to resolve first.
+  await Promise.all([loadSettingsFromDB(), loadExercisesFromDB()]);
+  // Quick Picks and the last-used-type memory don't affect queue building —
+  // let them resolve in the background instead of blocking startup.
+  loadQuickPicksFromDB();
+  loadLastLoggedTypeFromDB();
   rebuildQueue();
   loadState();
+  await loadQueueStateFromDB(); // may resume today's position/streak/skips from another device
   syncQueueWithLog(); // remove already-done exercises from queue
   viewingDay = getTodayKey();
   updateExerciseDisplay();
@@ -4231,6 +4750,16 @@ function bindStaticButtons() {
 
   document.querySelector('.editor-add-btn[data-action="addExercise"]')?.addEventListener('click', addExercise);
   document.querySelector('.editor-add-btn[data-action="logCustom"]')?.addEventListener('click', logCustomActivity);
+  document.querySelector('.editor-add-btn[data-action="saveQuickPick"]')?.addEventListener('click', saveCurrentAsQuickPick);
+  document.getElementById('quickPickManageBtn')?.addEventListener('click', toggleQuickPickManage);
+  renderQuickPicks();
+
+  document.querySelectorAll('#newExTypeToggle .modal-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#newExTypeToggle .modal-type-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
 
   document.querySelector('#historyModal .btn-modal-close')?.addEventListener('click', closeHistory);
   document.querySelector('#workoutModal .btn-modal-close')?.addEventListener('click', () => closeWorkoutModal('cancel'));
@@ -4260,14 +4789,15 @@ function bindStaticButtons() {
   $('tabFromList')?.addEventListener('click', () => switchPickerTab('list'));
   $('tabCustom')  ?.addEventListener('click', () => switchPickerTab('custom'));
 
-  document.querySelectorAll('.custom-template-btn[data-name]').forEach(btn => {
-    btn.addEventListener('click', () => applyCustomTemplate(btn.dataset.name, btn.dataset.cat));
-  });
-
   document.querySelector('.log-clear[data-action="editorDone"]')?.addEventListener('click', toggleEditor);
 
   document.querySelector('[data-action="openRecords"]')?.addEventListener('click', openRecords);
   document.querySelector('[data-action="closeRecords"]')?.addEventListener('click', closeRecords);
+  document.querySelector('[data-action="openRecordPicker"]')?.addEventListener('click', openRecordPicker);
+  document.querySelector('#recordPickerModal .btn-modal-close')?.addEventListener('click', closeRecordPicker);
+  $('recPickerTabList')  ?.addEventListener('click', () => switchRecordPickerTab('list'));
+  $('recPickerTabCustom')?.addEventListener('click', () => switchRecordPickerTab('custom'));
+  document.querySelector('[data-action="selectRecordCustom"]')?.addEventListener('click', selectRecordCustom);
   $('recordPickerModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecordPicker(); });
   $('recordsModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecords(); });
 
