@@ -1177,7 +1177,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.64</div>
+    <div class="app-version">v0.65</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -2396,6 +2396,16 @@ function findExerciseOrFallback(name, category) {
   return EXERCISES.find(e => e.name === name) || { name, category, note: '' };
 }
 
+// Returns an icon for an activity that isn't in the main exercise catalog —
+// checks Quick Picks first (they may have a specific icon like 🏐 for
+// Volleyball), then falls back to a generic category icon. Catalog exercises
+// intentionally don't get an icon here, to keep their look unchanged.
+function getCustomActivityIcon(name, category) {
+  const qp = QUICK_PICKS.find(q => q.name.toLowerCase() === name.toLowerCase());
+  if (qp && qp.icon) return qp.icon;
+  return CATEGORY_ICONS[category] || null;
+}
+
 // ── localStorage helpers ──
 // TODAY_KEY used to be a const computed once at page load, which meant a tab
 // left open across midnight kept writing under yesterday's key. getTodayKey()
@@ -3340,7 +3350,9 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
   _pendingModalEx = ex;
   _pendingModalCallback = callback;
   _modalQueueMode = queueMode || null;
-  document.getElementById('modalExName').textContent = ex.name;
+  const isCatalogExercise = EXERCISES.some(e => e.name === ex.name);
+  const icon = isCatalogExercise ? null : getCustomActivityIcon(ex.name, ex.category);
+  document.getElementById('modalExName').textContent = icon ? `${icon} ${ex.name}` : ex.name;
 
   // Queue checkbox
   const queueField = document.getElementById('modalFieldQueueRemove');
