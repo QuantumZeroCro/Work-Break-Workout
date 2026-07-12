@@ -1215,7 +1215,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.68</div>
+    <div class="app-version">v0.69</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1662,7 +1662,14 @@ document.getElementById('authSubmitBtn').addEventListener('click', async () => {
     btn.textContent = '...';
     btn.disabled = true;
     try {
-      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+      // Always send password-reset links to the real production URL rather than
+      // whatever window.location.href happens to be — Supabase silently falls
+      // back to its default Site URL (often localhost) if redirectTo doesn't
+      // exactly match an allow-listed URL, and query strings/hash state can
+      // cause that mismatch even when testing from the real site.
+      const PROD_URL = 'https://quantumzerocro.github.io/Work-Break-Workout/';
+      const redirectTo = window.location.hostname === 'localhost' ? window.location.href : PROD_URL;
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) {
         errEl.style.color = '#f43f5e';
         errEl.textContent = error.message;
