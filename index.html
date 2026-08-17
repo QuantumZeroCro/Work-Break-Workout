@@ -393,17 +393,28 @@
 
   /* ── Log day tabs ── */
   .log-days {
-    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;
+    display: flex; gap: 6px; margin-bottom: 10px;
+    overflow-x: auto; flex-wrap: nowrap;
+    scrollbar-width: none; -ms-overflow-style: none;
   }
+  .log-days::-webkit-scrollbar { display: none; }
   .log-day-tab {
     font-size: 11px; font-family: 'Space Mono', monospace;
     background: var(--surface); border: 1px solid var(--surface2);
     color: var(--muted); border-radius: 6px; padding: 5px 10px;
     cursor: pointer; transition: all 0.15s;
+    flex: none; white-space: nowrap;
   }
   .log-day-tab:hover { border-color: var(--muted); color: var(--text); }
   .log-day-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .log-day-tab .tab-count { font-size: 9px; opacity: 0.7; margin-left: 4px; }
+  .log-day-more {
+    font-size: 11px; font-family: 'Space Grotesk', sans-serif;
+    background: none; border: 1px dashed #2a2d35;
+    color: var(--muted); border-radius: 6px; padding: 5px 10px;
+    cursor: pointer; flex: none; white-space: nowrap;
+  }
+  .log-day-more:hover { color: var(--text); border-color: var(--muted); }
 
   /* ── Notification banner ── */
   .notification {
@@ -1215,7 +1226,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.69</div>
+    <div class="app-version">v0.70</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1523,8 +1534,8 @@
           <option>Mobility</option><option>Grip</option><option>Skill</option>
         </select>
       </div>
-      <button class="editor-add-btn" data-action="logCustom">Log activity</button>
       <button class="editor-add-btn btn-ghost" id="saveQuickPickBtn" data-action="saveQuickPick">☆ Save as Quick Pick</button>
+      <button class="editor-add-btn" data-action="logCustom">Log activity</button>
     </div>
   </div>
 </div>
@@ -2604,6 +2615,9 @@ function keyToLabel(key) {
   return `${days[date.getDay()]}, ${d}.${m}.`;
 }
 
+let _logDaysExpanded = false;
+const LOG_DAYS_VISIBLE = 7;
+
 function renderLogDays() {
   const keys = getAllDayKeys();
   if (!keys.includes(getTodayKey())) keys.unshift(getTodayKey());
@@ -2618,7 +2632,16 @@ function renderLogDays() {
     } catch(e) { return false; }
   });
   if (visibleKeys.length <= 1) { container.innerHTML = ''; return; }
-  container.innerHTML = visibleKeys.map(key => {
+
+  // If the currently-viewed day is tucked away in the "more" section,
+  // auto-expand so its tab stays visible/active.
+  const viewingIdx = visibleKeys.indexOf(viewingDay);
+  const shouldExpand = _logDaysExpanded || (viewingIdx !== -1 && viewingIdx >= LOG_DAYS_VISIBLE);
+
+  const keysToShow = shouldExpand ? visibleKeys : visibleKeys.slice(0, LOG_DAYS_VISIBLE);
+  const hiddenCount = visibleKeys.length - keysToShow.length;
+
+  const tabsHtml = keysToShow.map(key => {
     let count = 0;
     try {
       const raw = localStorage.getItem(key);
@@ -2628,9 +2651,22 @@ function renderLogDays() {
       ${keyToLabel(key)}<span class="tab-count">${count > 0 ? count : ''}</span>
     </button>`;
   }).join('');
+
+  const moreBtn = hiddenCount > 0
+    ? `<button class="log-day-more" id="logDaysMoreBtn">+${hiddenCount} more</button>`
+    : (shouldExpand && visibleKeys.length > LOG_DAYS_VISIBLE
+        ? `<button class="log-day-more" id="logDaysMoreBtn">less</button>`
+        : '');
+
+  container.innerHTML = tabsHtml + moreBtn;
+
   // CSP-safe: wire click handlers instead of inline onclick
   container.querySelectorAll('.log-day-tab').forEach(btn => {
     btn.addEventListener('click', () => switchDay(btn.dataset.key));
+  });
+  document.getElementById('logDaysMoreBtn')?.addEventListener('click', () => {
+    _logDaysExpanded = !_logDaysExpanded;
+    renderLogDays();
   });
 }
 
