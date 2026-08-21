@@ -212,15 +212,6 @@
     transition: all 0.15s;
     letter-spacing: 0.04em;
   }
-  .btn-primary {
-    background: var(--accent);
-    color: #fff;
-    font-size: 14px;
-    padding: 12px 28px;
-  }
-  .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
-  .btn-primary:active { transform: translateY(0); }
-
   .btn-ghost {
     background: var(--surface);
     color: var(--muted);
@@ -1114,28 +1105,6 @@
     color: var(--success);
   }
 
-  /* ── Queue-remove prompt ── */
-  .queue-remove-prompt {
-    display: none;
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface);
-    border: 1px solid var(--surface2);
-    border-radius: 14px;
-    padding: 14px 18px;
-    width: 90%;
-    max-width: 380px;
-    z-index: 998;
-    flex-direction: column;
-    gap: 10px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  }
-  .queue-remove-prompt.open { display: flex; }
-  .queue-remove-msg { font-size: 13px; color: var(--text); line-height: 1.4; }
-  .queue-remove-btns { display: flex; gap: 8px; justify-content: flex-end; }
-
   /* ── Modal checkbox row ── */
   .modal-checkbox-row {
     display: flex;
@@ -1153,26 +1122,6 @@
     cursor: pointer;
     flex-shrink: 0;
   }
-
-  .modal-type-toggle {
-    display: flex;
-    gap: 4px;
-  }
-  .modal-type-btn {
-    flex: 1;
-    background: var(--surface2);
-    border: 1px solid var(--surface2);
-    color: var(--muted);
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 8px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .modal-type-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .modal-type-btn:not(.active):hover { color: var(--text); border-color: var(--muted); }
 
   /* ── Duration hh:mm:ss inputs ── */
   .duration-inputs {
@@ -1226,7 +1175,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.70</div>
+    <div class="app-version">v0.71</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1271,7 +1220,7 @@
   <button class="btn-ghost" aria-label="Toggle settings" >⚙ Settings</button>
   <button class="btn-ghost" aria-label="Edit exercise list" >✎ Exercises</button>
   <button class="btn-ghost" aria-label="View workout history" >📅 History</button>
-  <button class="btn-ghost" aria-label="View personal records" data-action="openRecords">🏆 Records</button>
+  <button class="btn-ghost" aria-label="View personal highscores" data-action="openRecords">🏆 Highscores</button>
   <button class="btn-ghost" aria-label="Manually log an activity" >+ Log</button>
 </div>
 
@@ -1299,14 +1248,14 @@
     </div>
   </div>
   <div class="setting-row">
-    <label class="label-danger">Reset records</label>
+    <label class="label-danger">Reset highscores</label>
     <button id="btnResetRecordsTrigger" class="btn-danger">Reset</button>
   </div>
   <div class="reset-confirm" id="resetRecordsConfirm">
-    <div class="reset-confirm-msg">This will permanently delete all your personal records. This cannot be undone.</div>
+    <div class="reset-confirm-msg">This will permanently delete all your personal highscores. This cannot be undone.</div>
     <div class="reset-confirm-btns">
       <button class="btn-cancel-small" data-action="hideResetRecords">Cancel</button>
-      <button class="btn-danger" data-action="confirmResetRecords">Yes, reset records</button>
+      <button class="btn-danger" data-action="confirmResetRecords">Yes, reset highscores</button>
     </div>
   </div>
 </div>
@@ -1354,11 +1303,6 @@
       <option>Mobility</option><option>Grip</option><option>Skill</option>
     </select>
     <input id="newExNote" class="editor-full-row" placeholder="Note (optional)" />
-    <div class="editor-full-row" style="font-size:11px;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;margin-top:2px;">Default log type</div>
-    <div class="modal-type-toggle editor-full-row" id="newExTypeToggle">
-      <button type="button" class="modal-type-btn active" data-type="reps">Reps</button>
-      <button type="button" class="modal-type-btn" data-type="duration">Duration</button>
-    </div>
     <button class="editor-add-btn" data-action="addExercise">+ Add exercise</button>
   </div>
 </div>
@@ -1386,14 +1330,14 @@
   </div>
 </div>
 
-<!-- Records modal -->
-<div class="modal-backdrop" id="recordsModal" role="dialog" aria-modal="true" aria-label="Personal Records">
+<!-- Highscores modal -->
+<div class="modal-backdrop" id="recordsModal" role="dialog" aria-modal="true" aria-label="Personal Highscores">
   <div class="modal modal-history">
     <div class="modal-header">
-      <h3>Personal Records</h3>
+      <h3>Highscores</h3>
       <div style="display:flex;align-items:center;gap:8px;">
         <button class="btn-ghost" style="font-size:12px;padding:4px 10px;" data-action="openRecordPicker">+ Add</button>
-        <button class="btn-modal-close" aria-label="Close records" data-action="closeRecords">×</button>
+        <button class="btn-modal-close" aria-label="Close highscores" data-action="closeRecords">×</button>
       </div>
     </div>
     <div id="recordsLoading" style="display:none" class="history-empty">Loading…</div>
@@ -1408,23 +1352,16 @@
     </div>
     <div class="modal-exercise-name" id="modalExName"></div>
     <div class="modal-fields">
-      <!-- Reps / Duration toggle -->
-      <div class="modal-field">
-        <div class="modal-type-toggle">
-          <button class="modal-type-btn active" id="modalTypeReps" >Reps</button>
-          <button class="modal-type-btn" id="modalTypeDuration" >Duration</button>
-        </div>
-      </div>
       <!-- Reps input -->
       <div class="modal-field" id="modalFieldReps">
         <label>Reps</label>
         <input type="text" id="modalReps" placeholder="e.g. 12" inputmode="numeric" />
         <div id="modalRepsWarn" style="display:none;font-size:11px;color:#f59e0b;margin-top:4px;">
-          ⚠ Looks like a duration — switch to the Duration tab instead?
+          ⚠ Reps must be a whole number
         </div>
       </div>
       <!-- Duration input (hh:mm:ss) -->
-      <div class="modal-field" id="modalFieldDuration" style="display:none">
+      <div class="modal-field" id="modalFieldDuration">
         <label>Duration (hh:mm:ss)</label>
         <div class="duration-inputs">
           <input type="number" id="modalDurH" placeholder="00" min="0" max="23" />
@@ -1467,11 +1404,11 @@
   </div>
 </div>
 
-<!-- Record picker modal -->
-<div class="modal-backdrop" id="recordPickerModal" role="dialog" aria-modal="true" aria-label="Add record">
+<!-- Highscore picker modal -->
+<div class="modal-backdrop" id="recordPickerModal" role="dialog" aria-modal="true" aria-label="Add highscore">
   <div class="modal">
     <div class="modal-header">
-      <h3>Add record</h3>
+      <h3>Add highscore</h3>
       <button class="btn-modal-close">×</button>
     </div>
     <div class="picker-tabs">
@@ -2100,7 +2037,6 @@ function saveExercises() {
 // each fire a separate request — only the final state after a short pause gets synced.
 let _exercisesSyncTimer = null;
 let _quickPicksSyncTimer = null;
-let _lastTypeSyncTimer = null;
 let _queueSettingsSyncTimer = null;
 function syncExercisesToDB() {
   if (!currentUser) return; // local-only until signed in; loadExercisesFromDB will merge on next sign-in
@@ -2184,38 +2120,6 @@ async function loadQuickPicksFromDB() {
       syncQuickPicksToDB(); // no row yet for this user — push local list as the starting point
     }
   } catch(e) { console.error('loadQuickPicksFromDB exception:', e); }
-}
-
-function syncLastLoggedTypeToDB() {
-  if (!currentUser) return;
-  clearTimeout(_lastTypeSyncTimer);
-  _lastTypeSyncTimer = setTimeout(async () => {
-    try {
-      const { error } = await sb.from('user_exercises').upsert({
-        user_id: currentUser.id,
-        last_logged_type: lastLoggedType,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
-      if (error) console.error('syncLastLoggedTypeToDB error:', error);
-    } catch(e) { console.error('syncLastLoggedTypeToDB exception:', e); }
-  }, 400);
-}
-
-async function loadLastLoggedTypeFromDB() {
-  if (!currentUser) return;
-  try {
-    const { data, error } = await sb.from('user_exercises')
-      .select('last_logged_type')
-      .eq('user_id', currentUser.id)
-      .maybeSingle();
-    if (error) { console.error('loadLastLoggedTypeFromDB error:', error); return; }
-    if (data?.last_logged_type && typeof data.last_logged_type === 'object') {
-      // Merge rather than overwrite, so anything logged locally before this
-      // finished loading isn't lost
-      lastLoggedType = { ...lastLoggedType, ...data.last_logged_type };
-      try { localStorage.setItem('wbw_last_type', JSON.stringify(lastLoggedType)); } catch(e) {}
-    }
-  } catch(e) { console.error('loadLastLoggedTypeFromDB exception:', e); }
 }
 
 // Combined sync for today's queue position (currentIdx/streak/skips) and app
@@ -2531,23 +2435,6 @@ function loadState() {
   } catch(e) { console.error('loadState error:', e); }
 }
 
-// Remembers whether you last logged reps or duration for each exercise, so
-// ambiguous ones (Jumping Jacks, Mountain Climbers…) open on the right tab
-// without needing a fixed per-exercise setting. Takes priority over the
-// exercise's configured default type once you've logged it at least once.
-let lastLoggedType = (() => {
-  try {
-    const raw = localStorage.getItem('wbw_last_type');
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  return {};
-})();
-
-function saveLastLoggedType() {
-  try { localStorage.setItem('wbw_last_type', JSON.stringify(lastLoggedType)); } catch(e) {}
-  syncLastLoggedTypeToDB();
-}
-
 function addToLog(ex, how, detail, loggedAt) {
   const now = loggedAt || new Date();
   const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
@@ -2556,10 +2443,6 @@ function addToLog(ex, how, detail, loggedAt) {
 
   // Personal records aren't day-scoped, so update the cache either way
   if (detail) updateRecordCache(ex.name, detail);
-  if (detail) {
-    lastLoggedType[ex.name] = ('duration_seconds' in detail) ? 'duration' : 'reps';
-    saveLastLoggedType();
-  }
   syncLogToDB(entry);
 
   if (targetKey === getTodayKey()) {
@@ -2816,10 +2699,10 @@ async function confirmResetRecords() {
     if (error) throw error;
     personalRecords = {};
     updateExerciseDisplay();
-    notify('Records cleared');
+    notify('Highscores cleared');
   } catch(e) {
     console.error('reset records error:', e);
-    notify('Failed to reset records');
+    notify('Failed to reset highscores');
   }
 }
 
@@ -3088,7 +2971,7 @@ function doneExercise() {
     updateExerciseDisplay();
     renderQueue();
     startCountdown();
-  }, null, 'done');
+  }, personalBestPrefill(ex.name), 'done');
 }
 
 function startCountdown() {
@@ -3329,6 +3212,18 @@ function skipExercise() {
   triggerExercise();
 }
 
+// Build an openWorkoutModal prefill object from an exercise's personal best,
+// so a fresh log starts pre-filled with the record to beat instead of blank.
+function personalBestPrefill(name) {
+  const rec = name ? personalRecords[name] : null;
+  if (!rec) return null;
+  const prefill = {};
+  if (rec.bestReps > 0) prefill.reps = rec.bestReps;
+  if (rec.bestDur > 0) prefill.duration_seconds = rec.bestDur;
+  if (rec.bestWeight > 0) prefill.weight = rec.bestWeight;
+  return (prefill.reps != null || prefill.duration_seconds != null || prefill.weight != null) ? prefill : null;
+}
+
 function updateExerciseDisplay() {
   const ex = currentIdx < queue.length ? queue[currentIdx] : null;
   if (!ex) return;
@@ -3416,23 +3311,6 @@ function notify(msg) {
 let _pendingModalCallback = null;
 let _pendingModalEx = null;
 
-let _modalType = 'reps'; // 'reps' or 'duration'
-
-function setModalType(type) {
-  _modalType = type;
-  document.getElementById('modalTypeReps').classList.toggle('active', type === 'reps');
-  document.getElementById('modalTypeDuration').classList.toggle('active', type === 'duration');
-  document.getElementById('modalFieldReps').style.display = type === 'reps' ? '' : 'none';
-  document.getElementById('modalFieldDuration').style.display = type === 'duration' ? '' : 'none';
-  // Focus the right first input
-  setTimeout(() => {
-    const el = type === 'reps'
-      ? document.getElementById('modalReps')
-      : document.getElementById('modalDurH');
-    el && el.focus();
-  }, 50);
-}
-
 let _modalQueueMode = null; // null | 'done' | 'manual'
 
 function openWorkoutModal(ex, callback, prefill, queueMode) {
@@ -3460,24 +3338,15 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
     queueField.style.display = 'none';
   }
 
-  // Determine type from prefill
-  const hasDuration = prefill?.duration_seconds != null;
-  const hasReps = prefill?.reps != null;
-  // Prior logged data (editing an existing entry) always wins. For a fresh
-  // log: what you last picked for this exercise wins, then its configured
-  // default, then reps.
-  const remembered = ex?.name ? lastLoggedType[ex.name] : null;
-  const defaultType = hasDuration ? 'duration' : hasReps ? 'reps' :
-    (remembered || (ex?.type === 'duration' ? 'duration' : 'reps'));
-  setModalType(defaultType);
-
-  if (hasDuration) {
+  // Reps and duration are shown together now, so just fill in whatever
+  // the prefill has for each — no tab/type to pick.
+  document.getElementById('modalReps').value = prefill?.reps || '';
+  if (prefill?.duration_seconds != null) {
     const s = prefill.duration_seconds;
     document.getElementById('modalDurH').value = Math.floor(s / 3600) || '';
     document.getElementById('modalDurM').value = Math.floor((s % 3600) / 60) || '';
     document.getElementById('modalDurS').value = s % 60 || '';
   } else {
-    document.getElementById('modalReps').value = prefill?.reps || '';
     document.getElementById('modalDurH').value = '';
     document.getElementById('modalDurM').value = '';
     document.getElementById('modalDurS').value = '';
@@ -3505,10 +3374,7 @@ function openWorkoutModal(ex, callback, prefill, queueMode) {
   document.getElementById('workoutModal').classList.add('open');
   setModalOpen(true);
   setTimeout(() => {
-    const first = _modalType === 'reps'
-      ? document.getElementById('modalReps')
-      : document.getElementById('modalDurH');
-    first && first.focus();
+    document.getElementById('modalReps')?.focus();
   }, 100);
 }
 
@@ -3534,28 +3400,25 @@ function closeWorkoutModal(save) {
 
   if (save) {
     const repsRaw = document.getElementById('modalReps').value.trim();
-    // Validate reps is a plain integer when in reps mode
-    if (_modalType === 'reps' && repsRaw) {
-      if (!/^\d+$/.test(repsRaw)) {
-        document.getElementById('modalRepsWarn').style.display = '';
-        document.getElementById('workoutModal').classList.add('open');
-        document.getElementById('modalReps').focus();
-        return; // block save
-      }
+    // Validate reps is a plain integer, if given
+    if (repsRaw && !/^\d+$/.test(repsRaw)) {
+      document.getElementById('modalRepsWarn').style.display = '';
+      document.getElementById('workoutModal').classList.add('open');
+      document.getElementById('modalReps').focus();
+      return; // block save
     }
 
     const sets = parseInt(document.getElementById('modalSets').value) || 1;
     const weight = parseFloat(document.getElementById('modalWeight').value) || 0;
 
-    if (_modalType === 'duration') {
-      const h = parseInt(document.getElementById('modalDurH').value) || 0;
-      const m = parseInt(document.getElementById('modalDurM').value) || 0;
-      const s = parseInt(document.getElementById('modalDurS').value) || 0;
-      const duration_seconds = h * 3600 + m * 60 + s;
-      detail = { duration_seconds: duration_seconds || null, sets, weight };
-    } else {
-      detail = { reps: repsRaw || null, sets, weight };
-    }
+    const h = parseInt(document.getElementById('modalDurH').value) || 0;
+    const m = parseInt(document.getElementById('modalDurM').value) || 0;
+    const s = parseInt(document.getElementById('modalDurS').value) || 0;
+    const duration_seconds = h * 3600 + m * 60 + s;
+
+    // Both reps and duration can be filled in together now (e.g. "12 reps
+    // in 45s"); either or both may be null if left blank.
+    detail = { reps: repsRaw || null, duration_seconds: duration_seconds || null, sets, weight };
 
     const dateStr = document.getElementById('modalLogDate').value; // 'YYYY-MM-DD' or ''
     const lh = parseInt(document.getElementById('modalLogH').value);
@@ -3658,10 +3521,6 @@ function renderEditorList() {
         <input class="ex-edit-name" value="${escapeHtml(ex.name)}" placeholder="Exercise name" />
         <select class="ex-edit-cat">${catOptions}</select>
         <input class="ex-edit-note editor-full-row" value="${escapeHtml(ex.note || '')}" placeholder="Note (optional)" />
-        <div class="modal-type-toggle editor-full-row ex-edit-type">
-          <button type="button" class="modal-type-btn${ex.type === 'duration' ? '' : ' active'}" data-type="reps">Reps</button>
-          <button type="button" class="modal-type-btn${ex.type === 'duration' ? ' active' : ''}" data-type="duration">Duration</button>
-        </div>
         <div class="editor-item-edit-actions">
           <button class="editor-item-edit-cancel" data-action="cancelEditExercise">Cancel</button>
           <button class="editor-item-edit-save" data-action="saveEditExercise" data-idx="${origIdx}">Save</button>
@@ -3713,12 +3572,6 @@ function renderEditorList() {
   list.querySelectorAll('[data-action="confirmDeleteExercise"]').forEach(btn => {
     btn.addEventListener('click', () => deleteExercise(parseInt(btn.dataset.idx)));
   });
-  list.querySelectorAll('.ex-edit-type .modal-type-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      btn.parentElement.querySelectorAll('.modal-type-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
 
   // Enter submits the edit row, Escape cancels it
   const editRow = list.querySelector('.editor-item-edit-row');
@@ -3739,7 +3592,6 @@ async function saveEditExercise(idx) {
   const newName = row.querySelector('.ex-edit-name').value.trim();
   const newCat  = row.querySelector('.ex-edit-cat').value;
   const newNote = row.querySelector('.ex-edit-note').value.trim() || '—';
-  const newType = row.querySelector('.ex-edit-type .modal-type-btn.active')?.dataset.type || 'reps';
   if (!newName) { row.querySelector('.ex-edit-name').focus(); return; }
 
   const oldEx = EXERCISES[idx];
@@ -3747,7 +3599,7 @@ async function saveEditExercise(idx) {
   const oldName = oldEx.name;
   const renamed = oldName !== newName;
 
-  EXERCISES[idx] = { name: newName, category: newCat, note: newNote, type: newType };
+  EXERCISES[idx] = { name: newName, category: newCat, note: newNote };
   saveExercises();
 
   // Carry the in-memory PR over to the new name immediately so the UI is consistent
@@ -3793,9 +3645,8 @@ function addExercise() {
   const name = document.getElementById('newExName').value.trim();
   const cat = document.getElementById('newExCat').value;
   const note = document.getElementById('newExNote').value.trim() || '—';
-  const type = document.querySelector('#newExTypeToggle .modal-type-btn.active')?.dataset.type || 'reps';
   if (!name) { document.getElementById('newExName').focus(); return; }
-  const newEx = { name, category: cat, note, type };
+  const newEx = { name, category: cat, note };
   EXERCISES.push(newEx);
   saveExercises();
   document.getElementById('newExName').value = '';
@@ -3900,7 +3751,7 @@ function openRecordWorkoutModal(ex) {
   openWorkoutModal(ex, (detail, loggedAt, _q, cancelled) => {
     if (cancelled) return;
     saveNewRecord(ex, detail);
-  });
+  }, personalBestPrefill(ex.name));
 }
 
 async function saveNewRecord(ex, detail) {
@@ -3937,13 +3788,13 @@ async function saveNewRecord(ex, detail) {
       bestWeight: weight ?? personalRecords[ex.name]?.bestWeight ?? 0,
     };
 
-    notify(`🏆 Record saved — ${ex.name}`);
+    notify(`🏆 Highscore saved — ${ex.name}`);
     if (document.getElementById('recordsModal').classList.contains('open')) {
       loadRecordsFromDB();
     }
   } catch(e) {
     console.error('saveNewRecord error:', e);
-    notify('Failed to save record');
+    notify('Failed to save highscore');
   }
 }
 
@@ -3961,7 +3812,7 @@ function closeRecords() {
 async function loadRecordsFromDB() {
   const list = document.getElementById('recordsList');
   list.innerHTML = '<div class="history-empty">Loading…</div>';
-  if (!currentUser) { list.innerHTML = '<div class="history-empty">Sign in to see records</div>'; return; }
+  if (!currentUser) { list.innerHTML = '<div class="history-empty">Sign in to see highscores</div>'; return; }
 
   try {
     const { data, error } = await sb.from('personal_records')
@@ -3980,7 +3831,7 @@ async function loadRecordsFromDB() {
     }]);
 
     if (entries.length === 0) {
-      list.innerHTML = '<div class="history-empty">No records yet — start logging reps or durations to track your bests.</div>';
+      list.innerHTML = '<div class="history-empty">No highscores yet — start logging reps or durations to track your bests.</div>';
       return;
     }
 
@@ -4021,7 +3872,7 @@ async function loadRecordsFromDB() {
         <div class="records-row" id="rec-row-${i}">
           <span class="records-name">${safeName}</span>
           <div class="records-badges">${badges}</div>
-          <button class="record-edit-btn" title="Edit record" data-role="rec-edit" data-i="${i}" data-tab="${defaultTab}">✏️</button>
+          <button class="record-edit-btn" title="Edit highscore" data-role="rec-edit" data-i="${i}" data-tab="${defaultTab}">✏️</button>
         </div>
         <div class="record-edit-form" id="rec-form-${i}" data-name="${safeName}" data-cat="${safeCat}">
           <div class="record-edit-tabs">
@@ -4069,7 +3920,7 @@ async function loadRecordsFromDB() {
     });
   } catch(e) {
     console.error('records error:', e);
-    list.innerHTML = '<div class="history-empty">Failed to load records</div>';
+    list.innerHTML = '<div class="history-empty">Failed to load highscores</div>';
   }
 }
 
@@ -4630,7 +4481,7 @@ function logCustomActivity() {
       if (cancelled) return;
       addToLog(ex, 'manual', detail, loggedAt);
       notify(`✓ Logged — ${name}${logDateSuffix(loggedAt)}`);
-    });
+    }, personalBestPrefill(ex.name));
   }, 150);
 }
 
@@ -4679,7 +4530,7 @@ function selectManualExercise(name) {
       addToLog(ex, 'manual', detail, loggedAt);
       if (isInQueue && shouldRemoveFromQueue) removeFromQueue(ex.name);
       notify(`✓ Logged — ${ex.name}${logDateSuffix(loggedAt)}`);
-    }, null, isInQueue ? 'manual' : null);
+    }, personalBestPrefill(ex.name), isInQueue ? 'manual' : null);
   }, 150);
 }
 
@@ -4780,10 +4631,9 @@ async function initApp() {
   // Settings and exercises can both affect how today's queue gets built
   // (shuffle toggle, exercise list) so both need to resolve first.
   await Promise.all([loadSettingsFromDB(), loadExercisesFromDB()]);
-  // Quick Picks and the last-used-type memory don't affect queue building —
-  // let them resolve in the background instead of blocking startup.
+  // Quick Picks don't affect queue building — let them resolve in the
+  // background instead of blocking startup.
   loadQuickPicksFromDB();
-  loadLastLoggedTypeFromDB();
   rebuildQueue();
   loadState();
   await loadQueueStateFromDB(); // may resume today's position/streak/skips from another device
@@ -4902,13 +4752,6 @@ function bindStaticButtons() {
   document.getElementById('quickPickManageBtn')?.addEventListener('click', toggleQuickPickManage);
   renderQuickPicks();
 
-  document.querySelectorAll('#newExTypeToggle .modal-type-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#newExTypeToggle .modal-type-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
-
   document.querySelector('#historyModal .btn-modal-close')?.addEventListener('click', closeHistory);
   document.querySelector('#workoutModal .btn-modal-close')?.addEventListener('click', () => closeWorkoutModal('cancel'));
   document.querySelector('#manualLogModal .btn-modal-close')?.addEventListener('click', closeManualLog);
@@ -4917,8 +4760,6 @@ function bindStaticButtons() {
   $('workoutModal')   ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeWorkoutModal('cancel'); });
   $('manualLogModal') ?.addEventListener('click', e => { if (e.target === e.currentTarget) closeManualLog(); });
 
-  $('modalTypeReps')    ?.addEventListener('click', () => setModalType('reps'));
-  $('modalTypeDuration')?.addEventListener('click', () => { setModalType('duration'); document.getElementById('modalRepsWarn').style.display = 'none'; });
 
   // Live reps validation — warn if value looks like a duration not an integer
   $('modalReps')?.addEventListener('input', () => {
