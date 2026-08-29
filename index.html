@@ -1175,7 +1175,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.71</div>
+    <div class="app-version">v0.72</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -3716,7 +3716,11 @@ function switchRecordPickerTab(tab) {
 
 function filterRecordPicker(query) {
   const q = query.toLowerCase();
-  const matches = EXERCISES.filter(e => !q || e.name.toLowerCase().includes(q));
+  const matches = EXERCISES.filter(e => !q || e.name.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const ci = a.category.localeCompare(b.category);
+      return ci !== 0 ? ci : a.name.localeCompare(b.name);
+    });
   const list = document.getElementById('recPickerList');
   if (matches.length === 0) { list.innerHTML = '<div class="picker-empty">No matches</div>'; return; }
   list.innerHTML = matches.map(ex => {
@@ -4497,7 +4501,11 @@ function filterPicker(query) {
   const doneTodayNames = new Set(
     dailyLog.filter(e => e.how === 'done' || e.how === 'manual' || e.how === 'repeat').map(e => e.name)
   );
-  const matches = EXERCISES.filter(e => !q || e.name.toLowerCase().includes(q));
+  const matches = EXERCISES.filter(e => !q || e.name.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const ci = a.category.localeCompare(b.category);
+      return ci !== 0 ? ci : a.name.localeCompare(b.name);
+    });
   const list = document.getElementById('pickerList');
   if (matches.length === 0) {
     list.innerHTML = '<div class="picker-empty">No matches</div>';
