@@ -6,6 +6,7 @@
 <title>Work Break Workout</title>
   <meta name="description" content="A personal workout timer that prompts exercises throughout your workday, tracks your daily log, and works offline as a single HTML file." />
   <meta name="theme-color" content="#0e0f11" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%8B%F0%9F%8F%BC%E2%80%8D%E2%99%82%EF%B8%8F%3C/text%3E%3C/svg%3E" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <!--
   SUPABASE SECURITY STATUS
@@ -1209,7 +1210,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.73</div>
+    <div class="app-version">v0.74</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -3834,7 +3835,7 @@ function closeWorkoutModal(save) {
   _pendingModalCallback = null;
   _pendingModalEx = null;
   _modalQueueMode = null;
-  cb(detail, loggedAt, shouldRemoveFromQueue, false); // cancelled=false
+  cb(details, loggedAt, shouldRemoveFromQueue, false); // cancelled=false
 }
 
 
