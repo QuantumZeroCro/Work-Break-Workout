@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
 <title>Work Break Workout</title>
   <meta name="description" content="A personal workout timer that prompts exercises throughout your workday, tracks your daily log, and works offline as a single HTML file." />
   <meta name="theme-color" content="#0e0f11" />
@@ -517,6 +517,9 @@
     padding: 28px 24px;
     width: 90%; max-width: 380px;
     display: flex; flex-direction: column; gap: 16px;
+    /* Stay inside the visible area (shrinks with the on-screen keyboard) and scroll internally */
+    max-height: 92vh; max-height: 92dvh;
+    overflow-y: auto;
   }
   .modal h3 {
     font-size: 16px; font-weight: 700; color: var(--text);
@@ -555,6 +558,39 @@
     font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
   }
   .editor-list { display: flex; flex-direction: column; gap: 5px; max-height: 320px; overflow-y: auto; }
+
+  /* ── Rotation split: in-rotation vs excluded, with a move button between ── */
+  .rotation-split { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: start; margin-top: 4px; }
+  .rotation-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rotation-col-header {
+    font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase;
+    padding-bottom: 4px; border-bottom: 1px solid var(--surface2); margin-bottom: 2px;
+  }
+  .rotation-items { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; }
+  .rotation-item {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1px solid var(--surface2); border-radius: 8px;
+    padding: 6px 8px; min-width: 0;
+  }
+  .rotation-item input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+  .rotation-item-name {
+    flex: 1; min-width: 0; font-size: 12px; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rotation-item-icons { display: flex; gap: 2px; flex-shrink: 0; }
+  .rotation-item-icons button {
+    background: none; border: none; color: var(--muted); font-size: 11px; padding: 2px; cursor: pointer; line-height: 1;
+  }
+  .rotation-item-icons button:hover { color: var(--text); }
+  .rotation-empty { font-size: 11px; color: var(--muted); padding: 10px 4px; text-align: center; }
+  .rotation-move-col { display: flex; align-items: center; justify-content: center; align-self: center; }
+  .rotation-move-btn {
+    background: var(--surface2); border: 1px solid #2a2d35; color: var(--accent2);
+    border-radius: 10px; width: 40px; height: 40px; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .rotation-move-btn:disabled { opacity: 0.35; cursor: default; }
+  .rotation-move-btn:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
   .editor-item {
     background: var(--surface);
     border: 1px solid var(--surface2);
@@ -643,6 +679,27 @@
     gap: 6px;
     margin-top: 8px;
   }
+  .cat-grid-label {
+    grid-column: 1 / -1;
+    font-size: 11px; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .cat-grid { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .cat-chip {
+    background: var(--surface2);
+    border: 1px solid #2a2d35;
+    color: var(--text-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .cat-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .cat-chip:not(.active):hover { color: var(--text); border-color: var(--muted); }
+  .editor-item-extra-cats { font-size: 11px; opacity: 0.6; margin-left: 2px; }
   .editor-add-row input, .editor-add-row select {
     background: var(--surface2);
     border: 1px solid #2a2d35;
@@ -1212,7 +1269,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.70</div>
+    <div class="app-version">v0.77</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1340,21 +1397,30 @@
   <div class="editor-header">
     <span class="editor-title">Exercise list</span>
     <div class="editor-header-actions">
-      <button class="log-clear" data-action="collapseAllCats">collapse all</button>
-      <button class="log-clear" data-action="expandAllCats">expand all</button>
       <button class="log-clear" data-action="editorDone">done</button>
     </div>
   </div>
   <div class="editor-list" id="editorList"></div>
   <button class="editor-add-toggle" id="addExerciseToggle" data-action="toggleAddExercise">+ Add new exercise</button>
   <div class="editor-add-row" id="editorAddRow" style="display:none">
-    <input id="newExName" placeholder="Exercise name" autocomplete="off" />
-    <select id="newExCat">
-      <option>Cardio</option><option>Core</option><option>Pushing</option>
-      <option>Pulling</option><option>Legs</option><option>Back</option>
-      <option>Mobility</option><option>Grip</option><option>Skill</option>
-    </select>
+    <input id="newExName" placeholder="Exercise name" autocomplete="off" class="editor-full-row" />
+    <span class="cat-grid-label">Categories (tap to select, multiple allowed)</span>
+    <div class="cat-grid" id="newExCatGrid">
+      <button type="button" class="cat-chip active" data-cat="Cardio">🏃 Cardio</button>
+      <button type="button" class="cat-chip" data-cat="Core">🧘 Core</button>
+      <button type="button" class="cat-chip" data-cat="Pushing">💪 Pushing</button>
+      <button type="button" class="cat-chip" data-cat="Pulling">🏋️ Pulling</button>
+      <button type="button" class="cat-chip" data-cat="Legs">🦵 Legs</button>
+      <button type="button" class="cat-chip" data-cat="Back">🧍 Back</button>
+      <button type="button" class="cat-chip" data-cat="Mobility">🤸 Mobility</button>
+      <button type="button" class="cat-chip" data-cat="Grip">✊ Grip</button>
+      <button type="button" class="cat-chip" data-cat="Skill">🤾 Skill</button>
+    </div>
     <input id="newExNote" class="editor-full-row" placeholder="Note (optional)" autocomplete="off" />
+    <label class="modal-checkbox-row editor-full-row">
+      <input type="checkbox" id="newExQueueToday" checked />
+      <span>Add to rotation</span>
+    </label>
     <button class="editor-add-btn" data-action="addExercise">+ Add exercise</button>
   </div>
 </div>
@@ -1378,7 +1444,9 @@
         <button class="btn-danger" data-action="confirmClearOldHistory">Yes, clear local cache</button>
       </div>
     </div>
+    <input type="search" class="picker-search" id="historySearch" placeholder="Search history…" autocomplete="off" enterkeyhint="search" />
     <div class="history-list" id="historyList"></div>
+    <div class="history-empty" id="historyNoMatch" style="display:none">No matching entries</div>
   </div>
 </div>
 
@@ -2048,7 +2116,35 @@ function applyExerciseMigrations(exercises, baselineVersion) {
     } catch(e) {}
   }
 
-  return exercises;
+  return normalizeExercise(exercises);
+}
+
+// Every exercise carries a `categories` array (multi-tag) and an
+// `inRotation` flag. `category` is kept in sync as categories[0] —
+// everything that still expects one category (colors, icons, grouping, the
+// DB's `category` text column) keeps working unchanged. `inRotation`
+// defaults true (existing exercises were always prompted, so nothing should
+// silently drop out of rotation just from loading this update). Called both
+// after migrations and on a fresh install (which skips the migration
+// pipeline entirely) so every code path ends up with the same shape.
+function normalizeExercise(exercises) {
+  return exercises.map(ex => {
+    let next = ex;
+    if (!(Array.isArray(next.categories) && next.categories.length)) {
+      next = { ...next, categories: [next.category || 'Core'] };
+    } else if (next.category !== next.categories[0]) {
+      next = { ...next, category: next.categories[0] };
+    }
+    if (next.inRotation === undefined) next = { ...next, inRotation: true };
+    return next;
+  });
+}
+
+// All of an exercise's tagged categories — [primary, ...extra]. Falls back
+// to just the primary category for any exercise that predates multi-tagging
+// and somehow skipped normalization.
+function getExerciseCategories(ex) {
+  return Array.isArray(ex.categories) && ex.categories.length ? ex.categories : [ex.category || 'Core'];
 }
 
 // Load custom exercise list from localStorage (or fall back to defaults), then migrate
@@ -2065,7 +2161,7 @@ let EXERCISES = (() => {
     const latest = Math.max(0, ...EXERCISE_MIGRATIONS.map(m => m.version));
     localStorage.setItem('wbw_exercises_version', String(latest));
   } catch(e) {}
-  return [...DEFAULT_EXERCISES];
+  return normalizeExercise([...DEFAULT_EXERCISES]);
 })();
 
 function saveExercises() {
@@ -2294,13 +2390,13 @@ function getTodayLocalMidnight() {
   return new Date(Math.floor(s/10000), Math.floor((s%10000)/100)-1, s%100, 0, 0, 0, 0);
 }
 
-function buildDailyQueue() {
+function buildDailyQueue(sourceExercises) {
   // Each day gets a unique but consistent shuffle — same order if you reopen today
   const rng = seededRandom(getTodaySeed());
 
   const buckets = {};
   BUCKET_ORDER.forEach(cat => {
-    buckets[cat] = seededShuffle(EXERCISES.filter(e => e.category === cat), rng);
+    buckets[cat] = seededShuffle(sourceExercises.filter(e => e.category === cat), rng);
   });
 
   const result = [];
@@ -2321,7 +2417,11 @@ function buildDailyQueue() {
 
 function rebuildQueue() {
   const doShuffle = document.getElementById('shuffleCheck').checked;
-  queue = doShuffle ? buildDailyQueue() : [...EXERCISES];
+  // Exercises moved out of rotation (editor's "Not in rotation" list) are
+  // excluded from the daily prompts entirely — they're still fully loggable
+  // by hand, just never auto-queued.
+  const activeExercises = EXERCISES.filter(ex => ex.inRotation !== false);
+  queue = doShuffle ? buildDailyQueue(activeExercises) : [...activeExercises];
   currentIdx = 0;
   updateExerciseDisplay();
   renderQueue();
@@ -3588,6 +3688,15 @@ function updateRingClickability() {
   }
 }
 
+// Focus a field on open — but only on devices with a precise pointer (desktop).
+// On touch devices, focusing pops the on-screen keyboard immediately and covers
+// most of the modal, so let the user tap the field themselves.
+function autoFocus(el) {
+  if (!el) return;
+  try { if (window.matchMedia('(pointer: coarse)').matches) return; } catch(e) {}
+  el.focus();
+}
+
 function notify(msg) {
   const el = document.getElementById('notification');
   el.textContent = msg;
@@ -3734,7 +3843,7 @@ function openWorkoutModal(ex, callback, prefill, queueMode, multiSet) {
   document.getElementById('workoutModal').classList.add('open');
   setModalOpen(true);
   setTimeout(() => {
-    document.querySelector('#modalRepRows input')?.focus();
+    autoFocus(document.querySelector('#modalRepRows input'));
   }, 100);
 }
 
@@ -3847,18 +3956,50 @@ function toggleEditor() {
   const open = sec.style.display === 'none' || sec.style.display === '';
   sec.style.display = open ? 'block' : 'none';
   if (open) renderEditorList();
-  else { _editingExerciseIdx = null; _confirmingDeleteIdx = null; }
+  else { _editingExerciseIdx = null; _confirmingDeleteIdx = null; _rotationSelected.clear(); }
 }
 
-let _collapsedCategories = new Set();
+// idx (into EXERCISES) of items checked in the rotation-split view, pending a move
+let _rotationSelected = new Set();
 
-function collapseAllCategories() {
-  EXERCISES.forEach(ex => _collapsedCategories.add(ex.category));
-  renderEditorList();
-}
+// Moves every checked exercise to the other column: checked items currently
+// in rotation get excluded (and pulled from today's remaining queue);
+// checked items currently excluded get included (and, if today's queue is
+// already built, appended to it the same way a freshly-added exercise is —
+// appended rather than reshuffled in, so nothing already in progress gets
+// disturbed).
+function moveSelectedRotation() {
+  if (_rotationSelected.size === 0) return;
+  const wasAllDone = currentIdx >= queue.length;
+  let addedAny = false;
 
-function expandAllCategories() {
-  _collapsedCategories.clear();
+  _rotationSelected.forEach(idx => {
+    const ex = EXERCISES[idx];
+    if (!ex) return;
+    if (ex.inRotation === false) {
+      ex.inRotation = true;
+      if (!queue.some(q => q.name === ex.name)) { queue.push(ex); addedAny = true; }
+    } else {
+      ex.inRotation = false;
+      removeFromQueue(ex.name); // also re-renders queue/progress for the removal side
+    }
+  });
+
+  _rotationSelected.clear();
+  saveExercises();
+
+  if (addedAny && wasAllDone) {
+    // Back out of the celebration screen now that there's something to do again
+    document.getElementById('btnDone').disabled = true;
+    document.getElementById('btnSkip').disabled = true;
+    document.getElementById('ringTime').textContent = 'START';
+    document.getElementById('ringLabel').textContent = 'ready to go';
+    document.getElementById('ringSubLabel').textContent = 'press start';
+    document.getElementById('ringProgress').style.stroke = '#3b82f6';
+    updateRingClickability();
+  }
+  if (addedAny) { renderQueue(); updateDayProgress(); }
+
   renderEditorList();
 }
 
@@ -3868,73 +4009,88 @@ function toggleAddExercise() {
   const isOpen = row.style.display !== 'none';
   row.style.display = isOpen ? 'none' : 'grid';
   if (toggleBtn) toggleBtn.style.display = isOpen ? '' : 'none';
-  if (!isOpen) setTimeout(() => document.getElementById('newExName').focus(), 50);
+  if (!isOpen) setTimeout(() => autoFocus(document.getElementById('newExName')), 50);
 }
 
 function renderEditorList() {
   const list = document.getElementById('editorList');
-  // Sort categories alphabetically, then exercises alphabetically within each
+  // Alphabetical by category then name, same ordering as before — just no
+  // longer grouped under collapsible headers now that each exercise lives
+  // in one of two columns instead.
   const sorted = [...EXERCISES].map((ex, origIdx) => ({ ex, origIdx }))
     .sort((a, b) => {
       const ci = a.ex.category.localeCompare(b.ex.category);
       return ci !== 0 ? ci : a.ex.name.localeCompare(b.ex.name);
     });
 
-  // Count how many exercises are in each category, for the header count
-  const catCounts = {};
-  sorted.forEach(({ ex }) => { catCounts[ex.category] = (catCounts[ex.category] || 0) + 1; });
+  const editingIdx = _editingExerciseIdx;
+  const editingEntry = editingIdx != null ? sorted.find(s => s.origIdx === editingIdx) : null;
 
-  let lastCat = null;
-  list.innerHTML = sorted.map(({ ex, origIdx }) => {
-    const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
-    const collapsed = _collapsedCategories.has(ex.category);
-    let header = '';
-    if (ex.category !== lastCat) {
-      lastCat = ex.category;
-      header = `<div class="editor-cat-header${collapsed ? ' collapsed' : ''}" data-cat="${escapeHtml(ex.category)}" style="color:${color}">
-        <span class="editor-cat-chevron">▾</span>${ex.category}
-        <span class="editor-cat-count">${catCounts[ex.category]}</span>
-      </div>`;
-    }
-    if (collapsed) return header;
+  function renderEditRow(ex, origIdx) {
+    const exCats = getExerciseCategories(ex);
+    const catChips = BUCKET_ORDER.map(c =>
+      `<button type="button" class="cat-chip${exCats.includes(c) ? ' active' : ''}" data-cat="${c}">${CATEGORY_ICONS[c] || ''} ${c}</button>`
+    ).join('');
+    return `<div class="editor-item-edit-row" data-idx="${origIdx}">
+      <input class="ex-edit-name editor-full-row" value="${escapeHtml(ex.name)}" placeholder="Exercise name" autocomplete="off" />
+      <span class="cat-grid-label">Categories (tap to select, multiple allowed)</span>
+      <div class="cat-grid ex-edit-cat-grid">${catChips}</div>
+      <input class="ex-edit-note editor-full-row" value="${escapeHtml(ex.note || '')}" placeholder="Note (optional)" autocomplete="off" />
+      <div class="editor-item-edit-actions">
+        <button class="editor-item-edit-cancel" data-action="cancelEditExercise">Cancel</button>
+        <button class="editor-item-edit-save" data-action="saveEditExercise" data-idx="${origIdx}">Save</button>
+      </div>
+    </div>`;
+  }
 
-    if (_editingExerciseIdx === origIdx) {
-      const catOptions = BUCKET_ORDER.map(c => `<option ${c === ex.category ? 'selected' : ''}>${c}</option>`).join('');
-      return `${header}<div class="editor-item-edit-row" data-idx="${origIdx}">
-        <input class="ex-edit-name" value="${escapeHtml(ex.name)}" placeholder="Exercise name" autocomplete="off" />
-        <select class="ex-edit-cat">${catOptions}</select>
-        <input class="ex-edit-note editor-full-row" value="${escapeHtml(ex.note || '')}" placeholder="Note (optional)" autocomplete="off" />
-        <div class="editor-item-edit-actions">
-          <button class="editor-item-edit-cancel" data-action="cancelEditExercise">Cancel</button>
-          <button class="editor-item-edit-save" data-action="saveEditExercise" data-idx="${origIdx}">Save</button>
-        </div>
-      </div>`;
-    }
-
+  function renderItem(ex, origIdx) {
     const actions = _confirmingDeleteIdx === origIdx
       ? `<span class="editor-confirm-del">Delete?
           <button class="editor-confirm-no" data-action="cancelDeleteExercise">No</button>
           <button class="editor-confirm-yes" data-action="confirmDeleteExercise" data-idx="${origIdx}">Yes</button>
         </span>`
-      : `<button class="editor-btn-edit" data-action="startEditExercise" data-idx="${origIdx}" title="Edit">✎</button>
-         <button class="editor-btn-del" data-action="askDeleteExercise" data-idx="${origIdx}" title="Remove">✕</button>`;
+      : `<button data-action="startEditExercise" data-idx="${origIdx}" title="Edit">✎</button>
+         <button data-action="askDeleteExercise" data-idx="${origIdx}" title="Remove">✕</button>`;
 
-    return `${header}<div class="editor-item">
-      <span class="editor-item-name">${escapeHtml(ex.name)}</span>
-      <span class="editor-item-note">${escapeHtml(ex.note)}</span>
-      ${actions}
+    const extraCats = getExerciseCategories(ex).slice(1);
+    const extraCatIcons = extraCats.length
+      ? `<span class="editor-item-extra-cats" title="Also tagged: ${extraCats.join(', ')}">${extraCats.map(c => CATEGORY_ICONS[c] || '').join(' ')}</span>`
+      : '';
+    const checked = _rotationSelected.has(origIdx) ? 'checked' : '';
+
+    return `<div class="rotation-item">
+      <input type="checkbox" data-move-idx="${origIdx}" ${checked} />
+      <span class="rotation-item-name" title="${escapeHtml(ex.name)}">${escapeHtml(ex.name)}${extraCatIcons}</span>
+      <span class="rotation-item-icons">${actions}</span>
     </div>`;
-  }).join('');
+  }
 
-  // Category headers toggle collapse/expand
-  list.querySelectorAll('.editor-cat-header').forEach(el => {
-    el.addEventListener('click', () => {
-      const cat = el.dataset.cat;
-      if (_collapsedCategories.has(cat)) _collapsedCategories.delete(cat);
-      else _collapsedCategories.add(cat);
-      renderEditorList();
-    });
-  });
+  const inRotation = sorted.filter(({ ex }) => ex.inRotation !== false);
+  const excluded = sorted.filter(({ ex }) => ex.inRotation === false);
+
+  const leftHtml = inRotation.length
+    ? inRotation.map(({ ex, origIdx }) => renderItem(ex, origIdx)).join('')
+    : '<div class="rotation-empty">Nothing in rotation</div>';
+  const rightHtml = excluded.length
+    ? excluded.map(({ ex, origIdx }) => renderItem(ex, origIdx)).join('')
+    : '<div class="rotation-empty">Everything is in rotation</div>';
+
+  const editHtml = editingEntry ? renderEditRow(editingEntry.ex, editingEntry.origIdx) : '';
+
+  list.innerHTML = `${editHtml}
+    <div class="rotation-split">
+      <div class="rotation-col">
+        <div class="rotation-col-header">In rotation</div>
+        <div class="rotation-items">${leftHtml}</div>
+      </div>
+      <div class="rotation-move-col">
+        <button type="button" class="rotation-move-btn" id="rotationMoveBtn" title="Move checked exercises" ${_rotationSelected.size === 0 ? 'disabled' : ''}>⇄</button>
+      </div>
+      <div class="rotation-col">
+        <div class="rotation-col-header">Not in rotation</div>
+        <div class="rotation-items">${rightHtml}</div>
+      </div>
+    </div>`;
 
   // Wire up the per-row buttons (CSP-safe, no inline onclick)
   list.querySelectorAll('[data-action="startEditExercise"]').forEach(btn => {
@@ -3955,6 +4111,23 @@ function renderEditorList() {
   list.querySelectorAll('[data-action="confirmDeleteExercise"]').forEach(btn => {
     btn.addEventListener('click', () => deleteExercise(parseInt(btn.dataset.idx)));
   });
+  list.querySelectorAll('.ex-edit-cat-grid .cat-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const grid = btn.parentElement;
+      const willBeActive = !btn.classList.contains('active');
+      if (!willBeActive && grid.querySelectorAll('.cat-chip.active').length <= 1) return;
+      btn.classList.toggle('active', willBeActive);
+    });
+  });
+  list.querySelectorAll('[data-move-idx]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const idx = parseInt(cb.dataset.moveIdx);
+      if (cb.checked) _rotationSelected.add(idx); else _rotationSelected.delete(idx);
+      const moveBtn = document.getElementById('rotationMoveBtn');
+      if (moveBtn) moveBtn.disabled = _rotationSelected.size === 0;
+    });
+  });
+  document.getElementById('rotationMoveBtn')?.addEventListener('click', moveSelectedRotation);
 
   // Enter submits the edit row, Escape cancels it
   const editRow = list.querySelector('.editor-item-edit-row');
@@ -3963,7 +4136,7 @@ function renderEditorList() {
       if (e.key === 'Enter') { e.preventDefault(); saveEditExercise(parseInt(editRow.dataset.idx)); }
       if (e.key === 'Escape') { e.preventDefault(); _editingExerciseIdx = null; renderEditorList(); }
     });
-    editRow.querySelector('.ex-edit-name')?.focus();
+    autoFocus(editRow.querySelector('.ex-edit-name'));
   }
 }
 
@@ -3973,7 +4146,8 @@ async function saveEditExercise(idx) {
   const row = document.querySelector(`.editor-item-edit-row[data-idx="${idx}"]`);
   if (!row) return;
   const newName = row.querySelector('.ex-edit-name').value.trim();
-  const newCat  = row.querySelector('.ex-edit-cat').value;
+  const newCats = [...row.querySelectorAll('.ex-edit-cat-grid .cat-chip.active')].map(b => b.dataset.cat);
+  if (newCats.length === 0) newCats.push('Cardio');
   const newNote = row.querySelector('.ex-edit-note').value.trim() || '—';
   if (!newName) { row.querySelector('.ex-edit-name').focus(); return; }
 
@@ -3982,7 +4156,7 @@ async function saveEditExercise(idx) {
   const oldName = oldEx.name;
   const renamed = oldName !== newName;
 
-  EXERCISES[idx] = { name: newName, category: newCat, note: newNote };
+  EXERCISES[idx] = { name: newName, category: newCats[0], categories: newCats, note: newNote };
   saveExercises();
 
   // Carry the in-memory PR over to the new name immediately so the UI is consistent
@@ -4026,46 +4200,104 @@ function deleteExercise(i) {
 
 function addExercise() {
   const name = document.getElementById('newExName').value.trim();
-  const cat = document.getElementById('newExCat').value;
+  const cats = [...document.querySelectorAll('#newExCatGrid .cat-chip.active')].map(b => b.dataset.cat);
+  if (cats.length === 0) cats.push('Cardio');
   const note = document.getElementById('newExNote').value.trim() || '—';
+  const addToTodayQueue = document.getElementById('newExQueueToday').checked;
   if (!name) { document.getElementById('newExName').focus(); return; }
-  const newEx = { name, category: cat, note };
+  // This checkbox now drives the same persistent rotation flag used by the
+  // editor's in-rotation / not-in-rotation split, so there's one consistent
+  // way an exercise ends up excluded rather than two overlapping ones.
+  const newEx = { name, category: cats[0], categories: cats, note, inRotation: addToTodayQueue };
   EXERCISES.push(newEx);
   saveExercises();
   document.getElementById('newExName').value = '';
   document.getElementById('newExNote').value = '';
+  document.querySelectorAll('#newExCatGrid .cat-chip').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.getElementById('newExQueueToday').checked = true; // reset to the default for next time
   renderEditorList();
 
-  // Was the celebration ("all done") screen showing before this addition?
-  const wasAllDone = currentIdx >= queue.length;
+  if (addToTodayQueue) {
+    // Was the celebration ("all done") screen showing before this addition?
+    const wasAllDone = currentIdx >= queue.length;
 
-  // Append to the end of today's existing queue rather than rebuilding (which would
-  // reshuffle everything and reset progress) — the new exercise should just be the
-  // last thing left to do today, not shuffled in among what's already queued.
-  queue.push(newEx);
-  syncQueueWithLog(); // harmless no-op for the new exercise, but keeps done/skipped state consistent
+    // Append to the end of today's existing queue rather than rebuilding (which would
+    // reshuffle everything and reset progress) — the new exercise should just be the
+    // last thing left to do today, not shuffled in among what's already queued.
+    queue.push(newEx);
+    syncQueueWithLog(); // harmless no-op for the new exercise, but keeps done/skipped state consistent
 
-  if (wasAllDone) {
-    // There's now something to do again — back out of the celebration screen and
-    // return to the normal "ready to start" state rather than leaving the ring
-    // stuck on 🎉 with nothing reflecting the newly added exercise.
-    document.getElementById('btnDone').disabled = true;
-    document.getElementById('btnSkip').disabled = true;
-    document.getElementById('ringTime').textContent = 'START';
-    document.getElementById('ringLabel').textContent = 'ready to go';
-    document.getElementById('ringSubLabel').textContent = 'press start';
-    document.getElementById('ringProgress').style.stroke = '#3b82f6';
-    updateRingClickability();
+    if (wasAllDone) {
+      // There's now something to do again — back out of the celebration screen and
+      // return to the normal "ready to start" state rather than leaving the ring
+      // stuck on 🎉 with nothing reflecting the newly added exercise.
+      document.getElementById('btnDone').disabled = true;
+      document.getElementById('btnSkip').disabled = true;
+      document.getElementById('ringTime').textContent = 'START';
+      document.getElementById('ringLabel').textContent = 'ready to go';
+      document.getElementById('ringSubLabel').textContent = 'press start';
+      document.getElementById('ringProgress').style.stroke = '#3b82f6';
+      updateRingClickability();
+    }
   }
 
-  notify(`+ ${name} added`);
+  notify(`+ ${name} added` + (addToTodayQueue ? '' : ' (saved for later, not queued today)'));
 }
 
 // ── History ──
 function openHistory() {
+  const search = document.getElementById('historySearch');
+  if (search) search.value = '';
+  document.getElementById('historyNoMatch').style.display = 'none';
   renderHistory();
   document.getElementById('historyModal').classList.add('open');
   setModalOpen(true);
+  setTimeout(() => autoFocus(search), 100);
+}
+
+// Filters the (already rendered) history list by exercise name / detail text.
+// Done on the DOM rather than the data so edit/delete indexes stay untouched.
+function applyHistorySearch() {
+  const input = document.getElementById('historySearch');
+  const list = document.getElementById('historyList');
+  const noMatch = document.getElementById('historyNoMatch');
+  if (!input || !list) return;
+  const q = input.value.trim().toLowerCase();
+  const dayEls = list.querySelectorAll('.history-day');
+  let anyMatch = false;
+
+  dayEls.forEach(day => {
+    const box = day.querySelector('.history-day-entries');
+    const metaEl = day.querySelector('.history-day-meta');
+    if (metaEl && metaEl.dataset.orig === undefined) metaEl.dataset.orig = metaEl.textContent;
+
+    if (!q) {
+      // Search cleared — put everything back the way it was
+      day.style.display = '';
+      day.querySelectorAll('.history-entry').forEach(e => { e.style.display = ''; });
+      if (box.dataset.openBefore !== undefined) {
+        box.classList.toggle('open', box.dataset.openBefore === '1');
+        delete box.dataset.openBefore;
+      }
+      if (metaEl) metaEl.textContent = metaEl.dataset.orig;
+      return;
+    }
+
+    if (box.dataset.openBefore === undefined) box.dataset.openBefore = box.classList.contains('open') ? '1' : '0';
+    let matches = 0;
+    day.querySelectorAll('.history-entry').forEach(e => {
+      const text = ((e.querySelector('.history-entry-name')?.textContent || '') + ' ' +
+                    (e.querySelector('.history-entry-detail')?.textContent || '')).toLowerCase();
+      const hit = text.includes(q);
+      e.style.display = hit ? '' : 'none';
+      if (hit) matches++;
+    });
+    day.style.display = matches ? '' : 'none';
+    if (matches) { box.classList.add('open'); anyMatch = true; }
+    if (metaEl) metaEl.textContent = `${matches} match${matches === 1 ? '' : 'es'}`;
+  });
+
+  noMatch.style.display = (q && dayEls.length && !anyMatch) ? '' : 'none';
 }
 
 function closeHistory() {
@@ -4080,7 +4312,7 @@ function openRecordPicker() {
   switchRecordPickerTab('list');
   document.getElementById('recordPickerModal').classList.add('open');
   setModalOpen(true);
-  setTimeout(() => document.getElementById('recPickerSearch').focus(), 100);
+  setTimeout(() => autoFocus(document.getElementById('recPickerSearch')), 100);
 }
 
 function closeRecordPicker() {
@@ -4094,7 +4326,7 @@ function switchRecordPickerTab(tab) {
   document.getElementById('recPickerPanelCustom').style.display = isList ? 'none' : '';
   document.getElementById('recPickerTabList').classList.toggle('active', isList);
   document.getElementById('recPickerTabCustom').classList.toggle('active', !isList);
-  if (!isList) setTimeout(() => document.getElementById('recCustomName').focus(), 100);
+  if (!isList) setTimeout(() => autoFocus(document.getElementById('recCustomName')), 100);
 }
 
 function filterRecordPicker(query) {
@@ -4321,7 +4553,7 @@ function toggleRecordEdit(i, defaultTab) {
     if (defaultTab) switchRecTab(i, defaultTab);
     // Focus first input
     const first = form.querySelector('input[type="number"]');
-    if (first) setTimeout(() => first.focus(), 50);
+    if (first) setTimeout(() => autoFocus(first), 50);
   }
 }
 
@@ -4528,6 +4760,7 @@ async function renderHistory() {
   list.querySelectorAll('[data-role="hist-toggle"]').forEach(header => {
     header.addEventListener('click', () => toggleHistoryDay(header.dataset.target));
   });
+  applyHistorySearch(); // keep an active search applied after edits/deletes re-render the list
 }
 
 function toggleHistoryDay(id) {
@@ -4688,7 +4921,7 @@ function openManualLog() {
   filterPicker('');
   document.getElementById('manualLogModal').classList.add('open');
   setModalOpen(true);
-  setTimeout(() => document.getElementById('pickerSearch').focus(), 100);
+  setTimeout(() => autoFocus(document.getElementById('pickerSearch')), 100);
 }
 
 function switchPickerTab(tab) {
@@ -4697,7 +4930,7 @@ function switchPickerTab(tab) {
   document.getElementById('pickerPanelCustom').style.display = isList ? 'none' : '';
   document.getElementById('tabFromList').classList.toggle('active', isList);
   document.getElementById('tabCustom').classList.toggle('active', !isList);
-  if (!isList) setTimeout(() => document.getElementById('customName').focus(), 100);
+  if (!isList) setTimeout(() => autoFocus(document.getElementById('customName')), 100);
 }
 
 // ── Quick Picks (Custom Activity shortcuts) ──
@@ -4780,7 +5013,7 @@ function editQuickPick(idx) {
   const saveBtn = document.getElementById('saveQuickPickBtn');
   if (saveBtn) saveBtn.textContent = '✎ Update Quick Pick';
   renderQuickPicks();
-  document.getElementById('customName').focus();
+  autoFocus(document.getElementById('customName'));
 }
 
 function exitQuickPickEdit() {
@@ -4849,7 +5082,7 @@ function applyCustomTemplate(name, cat) {
   document.getElementById('customIcon').value = '';
   document.getElementById('customName').value = name;
   document.getElementById('customCat').value = cat;
-  document.getElementById('customName').focus();
+  autoFocus(document.getElementById('customName'));
 }
 
 function logDateSuffix(loggedAt) {
@@ -5146,6 +5379,15 @@ function bindStaticButtons() {
 
   document.querySelector('.editor-add-btn[data-action="addExercise"]')?.addEventListener('click', addExercise);
   document.getElementById('addExerciseToggle')?.addEventListener('click', toggleAddExercise);
+  document.querySelectorAll('#newExCatGrid .cat-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const grid = btn.parentElement;
+      const willBeActive = !btn.classList.contains('active');
+      // Keep at least one category selected — ignore the click that would clear the last one
+      if (!willBeActive && grid.querySelectorAll('.cat-chip.active').length <= 1) return;
+      btn.classList.toggle('active', willBeActive);
+    });
+  });
   document.querySelector('.editor-add-btn[data-action="logCustom"]')?.addEventListener('click', logCustomActivity);
   document.querySelector('.editor-add-btn[data-action="saveQuickPick"]')?.addEventListener('click', saveCurrentAsQuickPick);
   document.getElementById('quickPickManageBtn')?.addEventListener('click', toggleQuickPickManage);
@@ -5173,13 +5415,12 @@ function bindStaticButtons() {
 
   $('recPickerSearch')?.addEventListener('input', e => filterRecordPicker(e.target.value));
   $('pickerSearch')   ?.addEventListener('input', e => filterPicker(e.target.value));
+  $('historySearch')  ?.addEventListener('input', applyHistorySearch);
 
   $('tabFromList')?.addEventListener('click', () => switchPickerTab('list'));
   $('tabCustom')  ?.addEventListener('click', () => switchPickerTab('custom'));
 
   document.querySelector('.log-clear[data-action="editorDone"]')?.addEventListener('click', toggleEditor);
-  document.querySelector('.log-clear[data-action="collapseAllCats"]')?.addEventListener('click', collapseAllCategories);
-  document.querySelector('.log-clear[data-action="expandAllCats"]')?.addEventListener('click', expandAllCategories);
 
   document.querySelector('[data-action="openRecords"]')?.addEventListener('click', openRecords);
   document.querySelector('[data-action="closeRecords"]')?.addEventListener('click', closeRecords);
