@@ -1269,7 +1269,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.77</div>
+    <div class="app-version">v0.78</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -4014,14 +4014,11 @@ function toggleAddExercise() {
 
 function renderEditorList() {
   const list = document.getElementById('editorList');
-  // Alphabetical by category then name, same ordering as before — just no
-  // longer grouped under collapsible headers now that each exercise lives
-  // in one of two columns instead.
+  // Plain A–Z by name in both columns. There are no category headers in this
+  // two-column view, so sorting by category first would look random — a moved
+  // exercise should land in its alphabetical spot in the other list.
   const sorted = [...EXERCISES].map((ex, origIdx) => ({ ex, origIdx }))
-    .sort((a, b) => {
-      const ci = a.ex.category.localeCompare(b.ex.category);
-      return ci !== 0 ? ci : a.ex.name.localeCompare(b.ex.name);
-    });
+    .sort((a, b) => a.ex.name.localeCompare(b.ex.name, undefined, { sensitivity: 'base' }));
 
   const editingIdx = _editingExerciseIdx;
   const editingEntry = editingIdx != null ? sorted.find(s => s.origIdx === editingIdx) : null;
