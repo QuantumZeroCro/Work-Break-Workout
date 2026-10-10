@@ -547,16 +547,7 @@
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
   /* ── Exercise editor ── */
-  .editor-section {
-    width: 100%; max-width: 420px;
-  }
-  .editor-header {
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
-  }
-  .editor-header-actions { display: flex; align-items: center; gap: 10px; }
-  .editor-title {
-    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
-  }
+  /* The exercise list is a modal now (see .modal-editor below) */
   .editor-list { display: flex; flex-direction: column; gap: 5px; max-height: 320px; overflow-y: auto; }
 
   /* ── Rotation split: in-rotation vs excluded, with a move button between ── */
@@ -1109,6 +1100,14 @@
     margin-top: 2px;
   }
 
+
+  /* ── Exercise list modal ── */
+  .modal-editor { width: 96%; max-width: 440px; padding: 20px 14px; }
+  .editor-modal-body { flex: 1; min-height: 0; overflow-y: auto; }
+  /* The modal body scrolls as a whole, so the list itself shouldn't clip/scroll too */
+  .modal-editor .editor-list { max-height: none; overflow: visible; }
+  .modal-editor .rotation-items { max-height: min(340px, 45vh); }
+
   /* ── History modal sizing ── */
   .modal-history {
     max-width: 440px;
@@ -1269,7 +1268,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.79</div>
+    <div class="app-version">v0.80</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1392,14 +1391,16 @@
   <div class="log-list" id="logList"><div class="log-empty">No exercises yet today</div></div>
 </div>
 
-<!-- Exercise editor -->
-<div class="editor-section" id="editorSection" style="display:none">
-  <div class="editor-header">
-    <span class="editor-title">Exercise list</span>
-    <div class="editor-header-actions">
-      <button class="log-clear" data-action="editorDone">done</button>
+</div><!-- end mainApp -->
+
+<!-- Exercise list modal -->
+<div class="modal-backdrop" id="editorModal" role="dialog" aria-modal="true" aria-label="Exercise list">
+  <div class="modal modal-history modal-editor">
+    <div class="modal-header">
+      <h3>Exercise list</h3>
+      <button class="btn-modal-close" id="editorModalClose" aria-label="Close exercise list">×</button>
     </div>
-  </div>
+    <div class="editor-modal-body">
   <div class="editor-list" id="editorList"></div>
   <button class="editor-add-toggle" id="addExerciseToggle" data-action="toggleAddExercise">+ Add new exercise</button>
   <div class="editor-add-row" id="editorAddRow" style="display:none">
@@ -1423,9 +1424,9 @@
     </label>
     <button class="editor-add-btn" data-action="addExercise">+ Add exercise</button>
   </div>
+    </div>
+  </div>
 </div>
-
-</div><!-- end mainApp -->
 
 <!-- History modal -->
 <div class="modal-backdrop" id="historyModal" role="dialog" aria-modal="true" aria-label="History">
@@ -3984,12 +3985,29 @@ function closeWorkoutModal(save) {
 
 
 // ── Exercise editor ──
+function openEditor() {
+  const m = document.getElementById('editorModal');
+  if (m.classList.contains('open')) return;
+  renderEditorList();
+  m.classList.add('open');
+  setModalOpen(true);
+}
+
+function closeEditor() {
+  const m = document.getElementById('editorModal');
+  if (!m.classList.contains('open')) return;
+  m.classList.remove('open');
+  setModalOpen(false);
+  _editingExerciseIdx = null; _confirmingDeleteIdx = null; _rotationSelected.clear();
+  // Fold the add-exercise form back up so it's closed next time
+  document.getElementById('editorAddRow').style.display = 'none';
+  const toggleBtn = document.getElementById('addExerciseToggle');
+  if (toggleBtn) toggleBtn.style.display = '';
+}
+
 function toggleEditor() {
-  const sec = document.getElementById('editorSection');
-  const open = sec.style.display === 'none' || sec.style.display === '';
-  sec.style.display = open ? 'block' : 'none';
-  if (open) renderEditorList();
-  else { _editingExerciseIdx = null; _confirmingDeleteIdx = null; _rotationSelected.clear(); }
+  if (document.getElementById('editorModal').classList.contains('open')) closeEditor();
+  else openEditor();
 }
 
 // idx (into EXERCISES) of items checked in the rotation-split view, pending a move
@@ -4164,7 +4182,7 @@ function renderEditorList() {
   if (editRow) {
     editRow.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); saveEditExercise(parseInt(editRow.dataset.idx)); }
-      if (e.key === 'Escape') { e.preventDefault(); _editingExerciseIdx = null; renderEditorList(); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _editingExerciseIdx = null; renderEditorList(); }
     });
     autoFocus(editRow.querySelector('.ex-edit-name'));
   }
@@ -5450,7 +5468,8 @@ function bindStaticButtons() {
   $('tabFromList')?.addEventListener('click', () => switchPickerTab('list'));
   $('tabCustom')  ?.addEventListener('click', () => switchPickerTab('custom'));
 
-  document.querySelector('.log-clear[data-action="editorDone"]')?.addEventListener('click', toggleEditor);
+  $('editorModalClose')?.addEventListener('click', closeEditor);
+  $('editorModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeEditor(); });
 
   document.querySelector('[data-action="openRecords"]')?.addEventListener('click', openRecords);
   document.querySelector('[data-action="closeRecords"]')?.addEventListener('click', closeRecords);
@@ -5471,6 +5490,7 @@ function bindStaticButtons() {
     if ($('workoutModal')?.classList.contains('open'))      { closeWorkoutModal('cancel'); return; }
     if ($('recordsModal')?.classList.contains('open'))      { closeRecords(); return; }
     if ($('historyModal')?.classList.contains('open'))      { closeHistory(); return; }
+    if ($('editorModal')?.classList.contains('open'))       { closeEditor(); return; }
   });
 }
 
