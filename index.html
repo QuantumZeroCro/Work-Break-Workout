@@ -1269,7 +1269,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.78</div>
+    <div class="app-version">v0.79</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -2165,7 +2165,12 @@ let EXERCISES = (() => {
 })();
 
 function saveExercises() {
-  try { localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES)); } catch(e) {}
+  try {
+    localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES));
+    // When this device last changed the list — lets the next startup tell whether the
+    // cloud copy is actually newer, or whether this device has an edit that never made it up.
+    localStorage.setItem('wbw_exercises_edited_at', String(Date.now()));
+  } catch(e) {}
   syncExercisesToDB();
 }
 
@@ -2175,20 +2180,35 @@ let _exercisesSyncTimer = null;
 let _quickPicksSyncTimer = null;
 let _queueSettingsSyncTimer = null;
 let _recentSetsSyncTimer = null;
+let _exercisesSyncPending = false;
+async function pushExercisesToDB() {
+  _exercisesSyncPending = false;
+  try {
+    const { error } = await sb.from('user_exercises').upsert({
+      user_id: currentUser.id,
+      exercises: EXERCISES,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    if (error) { console.error('syncExercisesToDB error:', error); notify('⚠ Exercise list didn\'t sync to the cloud'); }
+  } catch(e) { console.error('syncExercisesToDB exception:', e); notify('⚠ Exercise list didn\'t sync to the cloud'); }
+}
 function syncExercisesToDB() {
   if (!currentUser) return; // local-only until signed in; loadExercisesFromDB will merge on next sign-in
   clearTimeout(_exercisesSyncTimer);
-  _exercisesSyncTimer = setTimeout(async () => {
-    try {
-      const { error } = await sb.from('user_exercises').upsert({
-        user_id: currentUser.id,
-        exercises: EXERCISES,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
-      if (error) console.error('syncExercisesToDB error:', error);
-    } catch(e) { console.error('syncExercisesToDB exception:', e); }
-  }, 400);
+  _exercisesSyncPending = true;
+  _exercisesSyncTimer = setTimeout(pushExercisesToDB, 400);
 }
+// If the page is backgrounded/closed inside the 400ms debounce window (easy on a
+// phone), the timer may never fire — and the next load would replace the local
+// list with the older cloud copy, silently dropping the latest edit. Flush
+// immediately when the page is hidden instead of waiting.
+function flushExercisesSync() {
+  if (!_exercisesSyncPending || !currentUser) return;
+  clearTimeout(_exercisesSyncTimer);
+  pushExercisesToDB();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushExercisesSync(); });
+window.addEventListener('pagehide', flushExercisesSync);
 
 // Loads the exercise list from the DB on sign-in so a custom list (additions, edits,
 // deletes, reorders) is available on every device, not just the one it was made on.
@@ -2198,10 +2218,23 @@ async function loadExercisesFromDB() {
   if (!currentUser) return;
   try {
     const { data, error } = await sb.from('user_exercises')
-      .select('exercises')
+      .select('exercises, updated_at')
       .eq('user_id', currentUser.id)
       .maybeSingle();
     if (error) { console.error('loadExercisesFromDB error:', error); return; }
+
+    // The cloud copy used to win unconditionally, so an edit made here that never
+    // reached the cloud (page backgrounded mid-sync, a failed request, offline) was
+    // wiped — locally too — on the next load. If this device's last edit is newer
+    // than the cloud copy, keep ours and push it up instead.
+    let localEditedAt = 0;
+    try { localEditedAt = parseInt(localStorage.getItem('wbw_exercises_edited_at') || '0') || 0; } catch(e) {}
+    const cloudUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+    if (data?.exercises && localEditedAt > cloudUpdatedAt) {
+      syncExercisesToDB();
+      return;
+    }
+
     if (data?.exercises && Array.isArray(data.exercises) && data.exercises.length) {
       // Don't assume the DB copy is already migrated — it may have been written by an
       // older version of this app (e.g. before a rename/removal migration existed) on
