@@ -712,6 +712,12 @@
   }
   .editor-add-btn:hover { background: var(--accent2); }
   .editor-full-row { grid-column: 1 / -1; }
+  .picker-item.picker-new { border: 1px dashed #2a2d35; color: var(--accent2); font-weight: 600; justify-content: center; }
+  .picker-back { background: none; border: none; color: var(--muted); font-family: inherit; font-size: 12px; cursor: pointer; padding: 0 0 10px; text-align: left; }
+  .picker-back:hover { color: var(--text); }
+  .editor-name-row { grid-column: 1 / -1; display: flex; gap: 6px; }
+  .editor-name-row input { flex: 1; min-width: 0; }
+  .editor-name-row .ex-icon-input { flex: none; width: 48px; text-align: center; font-size: 16px; padding-left: 4px; padding-right: 4px; }
 
   .editor-cat-header {
     font-size: 10px;
@@ -818,39 +824,6 @@
     width: 48px; flex: none; text-align: center; padding: 10px 4px;
     font-size: 18px;
   }
-
-  /* ── Custom activity templates ── */
-  .custom-templates { margin-bottom: 10px; }
-  .custom-templates-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-  .custom-templates-label {
-    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--muted); margin: 0;
-  }
-  .quickpick-manage-btn {
-    background: none; border: none; color: var(--muted); font-size: 11px;
-    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; padding: 2px 6px;
-  }
-  .quickpick-manage-btn.active { color: var(--accent); }
-  .custom-template-btns { display: flex; flex-wrap: wrap; gap: 6px; }
-  .qp-item { display: inline-flex; align-items: center; gap: 3px; }
-  .qp-item.qp-editing .custom-template-btn { border-color: var(--accent); color: var(--accent2); }
-  .qp-del-btn {
-    background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #ef4444;
-    border-radius: 50%; width: 20px; height: 20px; font-size: 13px; line-height: 1; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0;
-  }
-  .custom-template-btn {
-    background: var(--surface2);
-    border: 1px solid var(--surface2);
-    color: var(--text);
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 12px;
-    padding: 6px 10px;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .custom-template-btn:hover { border-color: var(--accent); color: var(--accent2); }
 
   /* ── Log again button on log entries ── */
   .log-again {
@@ -1268,7 +1241,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.80</div>
+    <div class="app-version">v0.81</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1404,7 +1377,10 @@
   <div class="editor-list" id="editorList"></div>
   <button class="editor-add-toggle" id="addExerciseToggle" data-action="toggleAddExercise">+ Add new exercise</button>
   <div class="editor-add-row" id="editorAddRow" style="display:none">
-    <input id="newExName" placeholder="Exercise name" autocomplete="off" class="editor-full-row" />
+    <div class="editor-name-row">
+      <input id="newExIcon" class="ex-icon-input" maxlength="8" placeholder="🏐" title="Icon (optional)" autocomplete="off" />
+      <input id="newExName" placeholder="Exercise name" autocomplete="off" />
+    </div>
     <span class="cat-grid-label">Categories (tap to select, multiple allowed)</span>
     <div class="cat-grid" id="newExCatGrid">
       <button type="button" class="cat-chip active" data-cat="Cardio">🏃 Cardio</button>
@@ -1520,22 +1496,35 @@
       <h3>Add highscore</h3>
       <button class="btn-modal-close">×</button>
     </div>
-    <div class="picker-tabs">
-      <button class="picker-tab active" id="recPickerTabList">From list</button>
-      <button class="picker-tab" id="recPickerTabCustom">Custom</button>
-    </div>
+    <!-- Exercise list (type a name that isn't there to add a highscore for a new activity) -->
     <div id="recPickerPanelList">
-      <input class="picker-search" id="recPickerSearch" placeholder="Search exercises…" autocomplete="off" />
+      <input class="picker-search" id="recPickerSearch" placeholder="Search, or type a new activity…" autocomplete="off" />
       <div class="picker-list" id="recPickerList"></div>
     </div>
+    <!-- New activity (reached from the "+ Add a highscore for … " row) -->
     <div id="recPickerPanelCustom" style="display:none">
+      <button type="button" class="picker-back" id="recPickerBack">← Back to list</button>
       <div class="picker-custom-fields">
-        <input class="picker-search" id="recCustomName" placeholder="Activity name…" autocomplete="off" />
-        <select id="recCustomCat">
-          <option>Cardio</option><option>Core</option><option>Pushing</option>
-          <option>Pulling</option><option>Legs</option><option>Back</option>
-          <option>Mobility</option><option>Grip</option><option>Skill</option>
-        </select>
+        <div class="picker-name-row">
+          <input class="picker-search" id="recCustomIcon" maxlength="8" placeholder="🏐" title="Icon (optional)" autocomplete="off" />
+          <input class="picker-search" id="recCustomName" placeholder="Activity name…" autocomplete="off" />
+        </div>
+        <span class="cat-grid-label">Categories (tap to select, multiple allowed)</span>
+        <div class="cat-grid" id="recCustomCatGrid">
+        <button type="button" class="cat-chip active" data-cat="Cardio">🏃 Cardio</button>
+        <button type="button" class="cat-chip" data-cat="Core">🧘 Core</button>
+        <button type="button" class="cat-chip" data-cat="Pushing">💪 Pushing</button>
+        <button type="button" class="cat-chip" data-cat="Pulling">🏋️ Pulling</button>
+        <button type="button" class="cat-chip" data-cat="Legs">🦵 Legs</button>
+        <button type="button" class="cat-chip" data-cat="Back">🧍 Back</button>
+        <button type="button" class="cat-chip" data-cat="Mobility">🤸 Mobility</button>
+        <button type="button" class="cat-chip" data-cat="Grip">✊ Grip</button>
+        <button type="button" class="cat-chip" data-cat="Skill">🤾 Skill</button>
+        </div>
+        <label class="modal-checkbox-row">
+          <input type="checkbox" id="recCustomSaveToList" />
+          <span>Save to exercise list</span>
+        </label>
       </div>
       <button class="editor-add-btn" data-action="selectRecordCustom">Continue</button>
     </div>
@@ -1549,38 +1538,37 @@
       <h3>Log activity</h3>
       <button class="btn-modal-close" >×</button>
     </div>
-    <div class="picker-tabs">
-      <button class="picker-tab active" id="tabFromList" >From list</button>
-      <button class="picker-tab" id="tabCustom" >Custom activity</button>
-    </div>
-
-    <!-- From list -->
+    <!-- Exercise list (type a name that isn't there to log it as a new activity) -->
     <div id="pickerPanelList">
-      <input class="picker-search" id="pickerSearch" placeholder="Search exercises…" autocomplete="off" />
+      <input class="picker-search" id="pickerSearch" placeholder="Search, or type a new activity…" autocomplete="off" />
       <div class="picker-list" id="pickerList"></div>
     </div>
 
-    <!-- Custom activity -->
+    <!-- New activity (reached from the "+ Log … as a new activity" row) -->
     <div id="pickerPanelCustom" style="display:none">
-      <div class="custom-templates">
-        <div class="custom-templates-label-row">
-          <div class="custom-templates-label">Quick pick</div>
-          <button type="button" class="quickpick-manage-btn" id="quickPickManageBtn">Manage</button>
-        </div>
-        <div class="custom-template-btns" id="quickPickBtns"></div>
-      </div>
+      <button type="button" class="picker-back" id="pickerBack">← Back to list</button>
       <div class="picker-custom-fields">
         <div class="picker-name-row">
-          <input class="picker-search" id="customIcon" maxlength="4" placeholder="🏐" title="Icon (optional) — leave blank to use the category icon" autocomplete="off" />
+          <input class="picker-search" id="customIcon" maxlength="8" placeholder="🏐" title="Icon (optional) — leave blank to use the category icon" autocomplete="off" />
           <input class="picker-search" id="customName" placeholder="Activity name…" autocomplete="off" />
         </div>
-        <select id="customCat">
-          <option>Cardio</option><option>Core</option><option>Pushing</option>
-          <option>Pulling</option><option>Legs</option><option>Back</option>
-          <option>Mobility</option><option>Grip</option><option>Skill</option>
-        </select>
+        <span class="cat-grid-label">Categories (tap to select, multiple allowed)</span>
+        <div class="cat-grid" id="customCatGrid">
+          <button type="button" class="cat-chip active" data-cat="Cardio">🏃 Cardio</button>
+          <button type="button" class="cat-chip" data-cat="Core">🧘 Core</button>
+          <button type="button" class="cat-chip" data-cat="Pushing">💪 Pushing</button>
+          <button type="button" class="cat-chip" data-cat="Pulling">🏋️ Pulling</button>
+          <button type="button" class="cat-chip" data-cat="Legs">🦵 Legs</button>
+          <button type="button" class="cat-chip" data-cat="Back">🧍 Back</button>
+          <button type="button" class="cat-chip" data-cat="Mobility">🤸 Mobility</button>
+          <button type="button" class="cat-chip" data-cat="Grip">✊ Grip</button>
+          <button type="button" class="cat-chip" data-cat="Skill">🤾 Skill</button>
+        </div>
+        <label class="modal-checkbox-row">
+          <input type="checkbox" id="customSaveToList" />
+          <span>Save to exercise list</span>
+        </label>
       </div>
-      <button class="editor-add-btn btn-ghost" id="saveQuickPickBtn" data-action="saveQuickPick">☆ Save as Quick Pick</button>
       <button class="editor-add-btn" data-action="logCustom">Log activity</button>
     </div>
   </div>
@@ -2165,12 +2153,13 @@ let EXERCISES = (() => {
   return normalizeExercise([...DEFAULT_EXERCISES]);
 })();
 
+let _exercisesVersion = 0;
 function saveExercises() {
+  _exercisesVersion++;
   try {
     localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES));
-    // When this device last changed the list — lets the next startup tell whether the
-    // cloud copy is actually newer, or whether this device has an edit that never made it up.
-    localStorage.setItem('wbw_exercises_edited_at', String(Date.now()));
+    // Marks "this device has an edit the cloud may not have" — only a successful push clears it
+    localStorage.setItem('wbw_exercises_dirty', '1');
   } catch(e) {}
   syncExercisesToDB();
 }
@@ -2178,19 +2167,21 @@ function saveExercises() {
 // Debounced DB push: rapid edits (e.g. typing in the rename form before Save) shouldn't
 // each fire a separate request — only the final state after a short pause gets synced.
 let _exercisesSyncTimer = null;
-let _quickPicksSyncTimer = null;
 let _queueSettingsSyncTimer = null;
 let _recentSetsSyncTimer = null;
 let _exercisesSyncPending = false;
 async function pushExercisesToDB() {
   _exercisesSyncPending = false;
+  const versionAtPush = _exercisesVersion;
   try {
     const { error } = await sb.from('user_exercises').upsert({
       user_id: currentUser.id,
       exercises: EXERCISES,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
-    if (error) { console.error('syncExercisesToDB error:', error); notify('⚠ Exercise list didn\'t sync to the cloud'); }
+    if (error) { console.error('syncExercisesToDB error:', error); notify('⚠ Exercise list didn\'t sync to the cloud'); return; }
+    // Only clear the flag if nothing was edited while this request was in flight
+    if (versionAtPush === _exercisesVersion) { try { localStorage.removeItem('wbw_exercises_dirty'); } catch(e) {} }
   } catch(e) { console.error('syncExercisesToDB exception:', e); notify('⚠ Exercise list didn\'t sync to the cloud'); }
 }
 function syncExercisesToDB() {
@@ -2219,19 +2210,18 @@ async function loadExercisesFromDB() {
   if (!currentUser) return;
   try {
     const { data, error } = await sb.from('user_exercises')
-      .select('exercises, updated_at')
+      .select('exercises')
       .eq('user_id', currentUser.id)
       .maybeSingle();
     if (error) { console.error('loadExercisesFromDB error:', error); return; }
 
     // The cloud copy used to win unconditionally, so an edit made here that never
     // reached the cloud (page backgrounded mid-sync, a failed request, offline) was
-    // wiped — locally too — on the next load. If this device's last edit is newer
-    // than the cloud copy, keep ours and push it up instead.
-    let localEditedAt = 0;
-    try { localEditedAt = parseInt(localStorage.getItem('wbw_exercises_edited_at') || '0') || 0; } catch(e) {}
-    const cloudUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
-    if (data?.exercises && localEditedAt > cloudUpdatedAt) {
+    // wiped — locally too — on the next load. If this device still has an edit the
+    // cloud never confirmed (the dirty flag), keep ours and push it up instead.
+    let unsyncedLocalEdit = false;
+    try { unsyncedLocalEdit = localStorage.getItem('wbw_exercises_dirty') === '1'; } catch(e) {}
+    if (data?.exercises && unsyncedLocalEdit) {
       syncExercisesToDB();
       return;
     }
@@ -2259,39 +2249,6 @@ const CATEGORY_COLORS = {
   Pulling: "#8b5cf6", Pushing: "#3b82f6", Legs: "#06b6d4",
   Core: "#ec4899", Back: "#f97316", Skill: "#a78bfa"
 };
-
-function syncQuickPicksToDB() {
-  if (!currentUser) return;
-  clearTimeout(_quickPicksSyncTimer);
-  _quickPicksSyncTimer = setTimeout(async () => {
-    try {
-      const { error } = await sb.from('user_exercises').upsert({
-        user_id: currentUser.id,
-        quick_picks: QUICK_PICKS,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
-      if (error) console.error('syncQuickPicksToDB error:', error);
-    } catch(e) { console.error('syncQuickPicksToDB exception:', e); }
-  }, 400);
-}
-
-async function loadQuickPicksFromDB() {
-  if (!currentUser) return;
-  try {
-    const { data, error } = await sb.from('user_exercises')
-      .select('quick_picks')
-      .eq('user_id', currentUser.id)
-      .maybeSingle();
-    if (error) { console.error('loadQuickPicksFromDB error:', error); return; }
-    if (data?.quick_picks && Array.isArray(data.quick_picks) && data.quick_picks.length) {
-      QUICK_PICKS = data.quick_picks;
-      try { localStorage.setItem('wbw_quickpicks', JSON.stringify(QUICK_PICKS)); } catch(e) {}
-      renderQuickPicks();
-    } else {
-      syncQuickPicksToDB(); // no row yet for this user — push local list as the starting point
-    }
-  } catch(e) { console.error('loadQuickPicksFromDB exception:', e); }
-}
 
 // Combined sync for today's queue position (currentIdx/streak/skips) and app
 // settings (interval/shuffle) — both live in the same saveState() write, so
@@ -2543,11 +2500,6 @@ function findExerciseOrFallback(name, category) {
 // checks Quick Picks first (they may have a specific icon like 🏐 for
 // Volleyball), then falls back to a generic category icon. Catalog exercises
 // intentionally don't get an icon here, to keep their look unchanged.
-function getCustomActivityIcon(name, category) {
-  const qp = QUICK_PICKS.find(q => q.name.toLowerCase() === name.toLowerCase());
-  if (qp && qp.icon) return qp.icon;
-  return CATEGORY_ICONS[category] || null;
-}
 
 // ── localStorage helpers ──
 // TODAY_KEY used to be a const computed once at page load, which meant a tab
@@ -2915,7 +2867,7 @@ function renderLogForKey(key) {
     return `<div class="log-item">
       <div class="log-item-left">
         <div class="log-dot" style="background:${color}"></div>
-        <span class="log-name">${escapeHtml(entry.name)}</span>
+        <span class="log-name">${iconPrefix(entry.name)}${escapeHtml(entry.name)}</span>
         ${skipTag}${manualTag}${repeatTag}${detailHtml}${editBtn}
       </div>
       <div class="log-item-right">
@@ -2987,7 +2939,6 @@ function exportData() {
     exportedAt: new Date().toISOString(),
     version: 1,
     exercises: EXERCISES,
-    quickPicks: QUICK_PICKS,
     personalRecords,
     recentSets,
     settings: {
@@ -3073,10 +3024,8 @@ async function confirmImport() {
     EXERCISES = applyExerciseMigrations(payload.exercises, 0);
     try { localStorage.setItem('wbw_exercises', JSON.stringify(EXERCISES)); } catch(e) {}
 
-    if (Array.isArray(payload.quickPicks)) {
-      QUICK_PICKS = payload.quickPicks;
-      try { localStorage.setItem('wbw_quickpicks', JSON.stringify(QUICK_PICKS)); } catch(e) {}
-    }
+    // Backups made before Quick Picks were merged still carry them — fold those in too
+    if (Array.isArray(payload.quickPicks)) mergeQuickPicksIntoExercises(payload.quickPicks);
 
     if (payload.recentSets && typeof payload.recentSets === 'object') {
       recentSets = payload.recentSets;
@@ -3099,7 +3048,6 @@ async function confirmImport() {
     // on your others — not just this browser.
     if (currentUser) {
       syncExercisesToDB();
-      syncQuickPicksToDB();
       syncRecentSetsToDB();
       try {
         const rows = Object.entries(personalRecords)
@@ -3651,7 +3599,7 @@ function updateExerciseDisplay() {
   if (!ex) return;
   document.getElementById('exCategory').textContent = ex.category;
   document.getElementById('exCategory').style.color = CATEGORY_COLORS[ex.category] || '#60a5fa';
-  document.getElementById('exName').textContent = ex.name;
+  document.getElementById('exName').textContent = (exerciseIcon(ex.name) ? exerciseIcon(ex.name) + ' ' : '') + ex.name;
   document.getElementById('exNote').textContent = ex.note;
 
   // Show personal best
@@ -3686,7 +3634,7 @@ function renderQueue() {
     const div = document.createElement('div');
     div.className = 'queue-item' + (i === 0 ? ' next' : '');
     const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
-    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span><span class="q-name">${escapeHtml(ex.name)}</span><span class="q-cat"><span class="q-cat-dot" style="background:${color}"></span>${escapeHtml(ex.category || '')}</span>`;
+    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span><span class="q-name">${iconPrefix(ex.name)}${escapeHtml(ex.name)}</span><span class="q-cat"><span class="q-cat-dot" style="background:${color}"></span>${escapeHtml(ex.category || '')}</span>`;
     list.appendChild(div);
   }
 }
@@ -3813,8 +3761,7 @@ function openWorkoutModal(ex, callback, prefill, queueMode, multiSet) {
   _pendingModalCallback = callback;
   _modalQueueMode = queueMode || null;
   _modalMultiSet = !!multiSet;
-  const isCatalogExercise = EXERCISES.some(e => e.name === ex.name);
-  const icon = isCatalogExercise ? null : getCustomActivityIcon(ex.name, ex.category);
+  const icon = getActivityIcon(ex);
   document.getElementById('modalExName').textContent = icon ? `${icon} ${ex.name}` : ex.name;
 
   // Queue checkbox
@@ -4080,7 +4027,10 @@ function renderEditorList() {
       `<button type="button" class="cat-chip${exCats.includes(c) ? ' active' : ''}" data-cat="${c}">${CATEGORY_ICONS[c] || ''} ${c}</button>`
     ).join('');
     return `<div class="editor-item-edit-row" data-idx="${origIdx}">
-      <input class="ex-edit-name editor-full-row" value="${escapeHtml(ex.name)}" placeholder="Exercise name" autocomplete="off" />
+      <div class="editor-name-row">
+        <input class="ex-icon-input ex-edit-icon" maxlength="8" value="${escapeHtml(ex.icon || '')}" placeholder="🏐" title="Icon (optional)" autocomplete="off" />
+        <input class="ex-edit-name" value="${escapeHtml(ex.name)}" placeholder="Exercise name" autocomplete="off" />
+      </div>
       <span class="cat-grid-label">Categories (tap to select, multiple allowed)</span>
       <div class="cat-grid ex-edit-cat-grid">${catChips}</div>
       <input class="ex-edit-note editor-full-row" value="${escapeHtml(ex.note || '')}" placeholder="Note (optional)" autocomplete="off" />
@@ -4108,7 +4058,7 @@ function renderEditorList() {
 
     return `<div class="rotation-item">
       <input type="checkbox" data-move-idx="${origIdx}" ${checked} />
-      <span class="rotation-item-name" title="${escapeHtml(ex.name)}">${escapeHtml(ex.name)}${extraCatIcons}</span>
+      <span class="rotation-item-name" title="${escapeHtml(ex.name)}">${ex.icon ? escapeHtml(ex.icon) + ' ' : ''}${escapeHtml(ex.name)}${extraCatIcons}</span>
       <span class="rotation-item-icons">${actions}</span>
     </div>`;
   }
@@ -4197,6 +4147,7 @@ async function saveEditExercise(idx) {
   const newCats = [...row.querySelectorAll('.ex-edit-cat-grid .cat-chip.active')].map(b => b.dataset.cat);
   if (newCats.length === 0) newCats.push('Cardio');
   const newNote = row.querySelector('.ex-edit-note').value.trim() || '—';
+  const newIcon = row.querySelector('.ex-edit-icon').value.trim();
   if (!newName) { row.querySelector('.ex-edit-name').focus(); return; }
 
   const oldEx = EXERCISES[idx];
@@ -4204,7 +4155,11 @@ async function saveEditExercise(idx) {
   const oldName = oldEx.name;
   const renamed = oldName !== newName;
 
-  EXERCISES[idx] = { name: newName, category: newCats[0], categories: newCats, note: newNote };
+  // Spread the old exercise so fields this form doesn't edit (inRotation!) carry over —
+  // rebuilding the object from scratch used to silently put an excluded exercise back in rotation.
+  const updated = { ...oldEx, name: newName, category: newCats[0], categories: newCats, note: newNote };
+  if (newIcon) updated.icon = newIcon; else delete updated.icon;
+  EXERCISES[idx] = updated;
   saveExercises();
 
   // Carry the in-memory PR over to the new name immediately so the UI is consistent
@@ -4251,15 +4206,18 @@ function addExercise() {
   const cats = [...document.querySelectorAll('#newExCatGrid .cat-chip.active')].map(b => b.dataset.cat);
   if (cats.length === 0) cats.push('Cardio');
   const note = document.getElementById('newExNote').value.trim() || '—';
+  const icon = document.getElementById('newExIcon').value.trim();
   const addToTodayQueue = document.getElementById('newExQueueToday').checked;
   if (!name) { document.getElementById('newExName').focus(); return; }
   // This checkbox now drives the same persistent rotation flag used by the
   // editor's in-rotation / not-in-rotation split, so there's one consistent
   // way an exercise ends up excluded rather than two overlapping ones.
   const newEx = { name, category: cats[0], categories: cats, note, inRotation: addToTodayQueue };
+  if (icon) newEx.icon = icon;
   EXERCISES.push(newEx);
   saveExercises();
   document.getElementById('newExName').value = '';
+  document.getElementById('newExIcon').value = '';
   document.getElementById('newExNote').value = '';
   document.querySelectorAll('#newExCatGrid .cat-chip').forEach((b, i) => b.classList.toggle('active', i === 0));
   document.getElementById('newExQueueToday').checked = true; // reset to the default for next time
@@ -4372,8 +4330,6 @@ function switchRecordPickerTab(tab) {
   const isList = tab === 'list';
   document.getElementById('recPickerPanelList').style.display = isList ? '' : 'none';
   document.getElementById('recPickerPanelCustom').style.display = isList ? 'none' : '';
-  document.getElementById('recPickerTabList').classList.toggle('active', isList);
-  document.getElementById('recPickerTabCustom').classList.toggle('active', !isList);
   if (!isList) setTimeout(() => autoFocus(document.getElementById('recCustomName')), 100);
 }
 
@@ -4385,18 +4341,36 @@ function filterRecordPicker(query) {
       return ci !== 0 ? ci : a.name.localeCompare(b.name);
     });
   const list = document.getElementById('recPickerList');
-  if (matches.length === 0) { list.innerHTML = '<div class="picker-empty">No matches</div>'; return; }
+
+  // Typing a name that isn't in the list offers to add a highscore for it as a new activity
+  const typed = query.trim();
+  const exact = typed && EXERCISES.some(e => e.name.toLowerCase() === typed.toLowerCase());
+  const newRow = (typed && !exact)
+    ? `<div class="picker-item picker-new" data-newname="${escapeHtml(typed)}">＋ Add a highscore for “${escapeHtml(typed)}” as a new activity</div>`
+    : '';
+  const wire = () => list.querySelectorAll('.picker-item').forEach(el => {
+    if (el.dataset.newname !== undefined) el.addEventListener('click', () => startNewRecordActivity(el.dataset.newname));
+    else el.addEventListener('click', () => selectRecordExercise(el.dataset.exname));
+  });
+  if (matches.length === 0) { list.innerHTML = newRow || '<div class="picker-empty">No matches</div>'; wire(); return; }
   list.innerHTML = matches.map(ex => {
     const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
     const safeName = escapeHtml(ex.name);
     return `<div class="picker-item" data-exname="${safeName}">
       <span class="editor-item-cat" style="background:${color}">${escapeHtml(ex.category)}</span>
-      <span>${safeName}</span>
+      <span>${ex.icon ? escapeHtml(ex.icon) + ' ' : ''}${safeName}</span>
     </div>`;
-  }).join('');
-  list.querySelectorAll('.picker-item').forEach(el => {
-    el.addEventListener('click', () => selectRecordExercise(el.dataset.exname));
-  });
+  }).join('') + newRow;
+  wire();
+}
+
+// Opens the new-activity panel with the typed name filled in and everything else fresh
+function startNewRecordActivity(name) {
+  document.getElementById('recCustomName').value = name;
+  document.getElementById('recCustomIcon').value = '';
+  setCustomCats(['Cardio'], 'recCustomCatGrid');
+  document.getElementById('recCustomSaveToList').checked = false;
+  switchRecordPickerTab('custom');
 }
 
 function selectRecordExercise(name) {
@@ -4409,19 +4383,24 @@ function selectRecordExercise(name) {
 function selectRecordCustom() {
   const name = document.getElementById('recCustomName').value.trim();
   if (!name) { document.getElementById('recCustomName').focus(); return; }
-  const cat = document.getElementById('recCustomCat').value;
+  const cats = getCustomCats('recCustomCatGrid');
+  const icon = document.getElementById('recCustomIcon').value.trim();
+  const saveToList = document.getElementById('recCustomSaveToList').checked;
+  const ex = { name, category: cats[0], categories: cats, note: '' };
+  if (icon) ex.icon = icon;
+  document.getElementById('recCustomSaveToList').checked = false;
   closeRecordPicker();
-  setTimeout(() => openRecordWorkoutModal({ name, category: cat, note: '' }), 150);
+  setTimeout(() => openRecordWorkoutModal(ex, saveToList), 150);
 }
 
-function openRecordWorkoutModal(ex) {
+function openRecordWorkoutModal(ex, saveToList) {
   openWorkoutModal(ex, (details, loggedAt, _q, cancelled) => {
     if (cancelled) return;
-    saveNewRecord(ex, details?.[0] || null);
+    saveNewRecord(ex, details?.[0] || null, saveToList);
   }, personalBestPrefill(ex.name), null, false);
 }
 
-async function saveNewRecord(ex, detail) {
+async function saveNewRecord(ex, detail, saveToList) {
   if (!detail) return;
   if (!currentUser) { notify('Not signed in'); return; }
 
@@ -4455,7 +4434,9 @@ async function saveNewRecord(ex, detail) {
       bestWeight: weight ?? personalRecords[ex.name]?.bestWeight ?? 0,
     };
 
-    notify(`🏆 Highscore saved — ${ex.name}`);
+    // Only added once the highscore actually saved, so a failure leaves your list alone
+    const addedToList = saveToList && addCustomToExerciseList(ex);
+    notify(`🏆 Highscore saved — ${ex.name}${addedToList ? ' · added to exercise list' : ''}`);
     if (document.getElementById('recordsModal').classList.contains('open')) {
       loadRecordsFromDB();
     }
@@ -4537,7 +4518,7 @@ async function loadRecordsFromDB() {
 
       return `${header}
         <div class="records-row" id="rec-row-${i}">
-          <span class="records-name">${safeName}</span>
+          <span class="records-name">${iconPrefix(name)}${safeName}</span>
           <div class="records-badges">${badges}</div>
           <button class="record-edit-btn" title="Edit highscore" data-role="rec-edit" data-i="${i}" data-tab="${defaultTab}">✏️</button>
         </div>
@@ -4782,7 +4763,7 @@ async function renderHistory() {
       const editBtn = e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-edit">edit</button>` : '';
       return `<div class="history-entry">
         <div class="log-dot history-dot" style="background:${color}"></div>
-        <span class="history-entry-name">${escapeHtml(e.name)}${skipTag}${repeatTag}</span>
+        <span class="history-entry-name">${iconPrefix(e.name)}${escapeHtml(e.name)}${skipTag}${repeatTag}</span>
         ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
         ${editBtn}
         ${delBtn}
@@ -4976,161 +4957,114 @@ function switchPickerTab(tab) {
   const isList = tab === 'list';
   document.getElementById('pickerPanelList').style.display = isList ? '' : 'none';
   document.getElementById('pickerPanelCustom').style.display = isList ? 'none' : '';
-  document.getElementById('tabFromList').classList.toggle('active', isList);
-  document.getElementById('tabCustom').classList.toggle('active', !isList);
   if (!isList) setTimeout(() => autoFocus(document.getElementById('customName')), 100);
 }
-
-// ── Quick Picks (Custom Activity shortcuts) ──
-// Stored locally on this device only, same as the exercise list used to be
-// before Supabase sync existed — there's no Supabase column for these yet,
-// so they won't follow you to another device. Ask me if you want that added.
-const DEFAULT_QUICK_PICKS = [
-  { name: "Volleyball", cat: "Cardio", icon: "🏐" },
-  { name: "Padel",      cat: "Cardio", icon: "🎾" },
-  { name: "Running",    cat: "Cardio", icon: "🏃" },
-  { name: "Sprint",     cat: "Cardio", icon: "⚡" },
-  { name: "Cycling",    cat: "Cardio", icon: "🚴" },
-  { name: "Walking",    cat: "Cardio", icon: "🚶" },
-  { name: "Hiking",     cat: "Cardio", icon: "🥾" },
-  { name: "Swimming",   cat: "Cardio", icon: "🏊" },
-  { name: "SPI30D",     cat: "Core",   icon: "🐷" },
-];
 
 const CATEGORY_ICONS = {
   Cardio: '🏃', Core: '🧘', Pushing: '💪', Pulling: '🏋️',
   Legs: '🦵', Back: '🧍', Mobility: '🤸', Grip: '✊', Skill: '🤾'
 };
 
-let QUICK_PICKS = (() => {
+// Categories ticked in the custom-activity chip grid (always at least one;
+// first in chip order is the "primary", the one stored on log entries).
+function getCustomCats(gridId = 'customCatGrid') {
+  const cats = [...document.querySelectorAll('#' + gridId + ' .cat-chip.active')].map(b => b.dataset.cat);
+  return cats.length ? cats : ['Cardio'];
+}
+function setCustomCats(cats, gridId = 'customCatGrid') {
+  const want = (Array.isArray(cats) ? cats : [cats]).filter(Boolean);
+  const list = want.length ? want : ['Cardio'];
+  document.querySelectorAll('#' + gridId + ' .cat-chip').forEach(b => b.classList.toggle('active', list.includes(b.dataset.cat)));
+}
+// ── Exercise icons ──
+function exerciseIcon(name) {
+  const ex = EXERCISES.find(e => e.name === name);
+  return ex && ex.icon ? ex.icon : '';
+}
+// "🏐 " (escaped) when the exercise has an icon, otherwise nothing — for building HTML
+function iconPrefix(name) {
+  const i = exerciseIcon(name);
+  return i ? escapeHtml(i) + ' ' : '';
+}
+// Icon for the log window title: the exercise's own icon; a one-off typed activity
+// uses the icon typed for it, else its category icon (as custom activities always did).
+function getActivityIcon(ex) {
+  const found = EXERCISES.find(e => e.name.toLowerCase() === ex.name.toLowerCase());
+  if (ex.icon) return ex.icon;
+  if (found) return found.icon || null;
+  return CATEGORY_ICONS[ex.category] || null;
+}
+
+// Adds a typed one-off activity to the exercise list as a not-in-rotation exercise.
+// Returns false if an exercise with that name is already there.
+function addCustomToExerciseList(ex) {
+  if (EXERCISES.some(e => e.name.toLowerCase() === ex.name.toLowerCase())) return false;
+  const cats = ex.categories && ex.categories.length ? ex.categories : [ex.category || 'Cardio'];
+  const entry = { name: ex.name, category: cats[0], categories: cats, note: '—', inRotation: false };
+  if (ex.icon) entry.icon = ex.icon;
+  EXERCISES.push(entry);
+  saveExercises();
+  if (document.getElementById('editorModal')?.classList.contains('open')) renderEditorList();
+  return true;
+}
+
+// One-time: Quick Picks used to be a separate list. They're now just exercises that
+// aren't in rotation, so fold any existing ones into the exercise list (icon and
+// categories kept; names you already have are skipped).
+function mergeQuickPicksIntoExercises(picks) {
+  const have = new Set(EXERCISES.map(e => e.name.toLowerCase()));
+  let added = 0;
+  (Array.isArray(picks) ? picks : []).forEach(qp => {
+    const name = ((qp && qp.name) || '').trim();
+    if (!name || have.has(name.toLowerCase())) return;
+    const cats = Array.isArray(qp.cats) && qp.cats.length ? qp.cats : [qp.cat || 'Cardio'];
+    const ex = { name, category: cats[0], categories: cats, note: '—', inRotation: false };
+    if (qp.icon) ex.icon = qp.icon;
+    EXERCISES.push(ex);
+    have.add(name.toLowerCase());
+    added++;
+  });
+  if (added) saveExercises();
+  return added;
+}
+
+async function migrateQuickPicksIntoExercises() {
+  try { if (localStorage.getItem('wbw_qp_merged') === '1') return; } catch(e) {}
+
+  let picks = [];
   try {
     const raw = localStorage.getItem('wbw_quickpicks');
-    if (raw) return JSON.parse(raw);
+    if (raw) { const a = JSON.parse(raw); if (Array.isArray(a)) picks = a; }
   } catch(e) {}
-  return [...DEFAULT_QUICK_PICKS];
-})();
 
-let quickPickEditMode = false;
-let _editingQuickPickIdx = null; // index of the quick pick currently loaded into the fields for editing, or null
-
-function saveQuickPicks() {
-  try { localStorage.setItem('wbw_quickpicks', JSON.stringify(QUICK_PICKS)); } catch(e) {}
-  syncQuickPicksToDB();
-}
-
-function renderQuickPicks() {
-  const container = document.getElementById('quickPickBtns');
-  if (!container) return;
-  container.innerHTML = QUICK_PICKS.map((qp, i) => {
-    const safeName = escapeHtml(qp.name);
-    const icon = qp.icon || '⭐';
-    if (quickPickEditMode) {
-      const editingClass = i === _editingQuickPickIdx ? ' qp-editing' : '';
-      return `<div class="qp-item${editingClass}">
-        <span class="custom-template-btn qp-apply" data-idx="${i}">${icon} ${safeName}</span>
-        <button type="button" class="qp-del-btn" data-idx="${i}" aria-label="Remove ${safeName}">×</button>
-      </div>`;
-    }
-    return `<button type="button" class="custom-template-btn qp-apply" data-idx="${i}">${icon} ${safeName}</button>`;
-  }).join('');
-
-  container.querySelectorAll('.qp-apply').forEach(el => {
-    el.addEventListener('click', () => {
-      const idx = parseInt(el.dataset.idx);
-      const qp = QUICK_PICKS[idx];
-      if (!qp) return;
-      if (quickPickEditMode) {
-        editQuickPick(idx);
-      } else {
-        applyCustomTemplate(qp.name, qp.cat);
-      }
-    });
-  });
-  container.querySelectorAll('.qp-del-btn').forEach(el => {
-    el.addEventListener('click', () => removeQuickPick(parseInt(el.dataset.idx)));
-  });
-}
-
-function editQuickPick(idx) {
-  const qp = QUICK_PICKS[idx];
-  if (!qp) return;
-  _editingQuickPickIdx = idx;
-  document.getElementById('customIcon').value = qp.icon || '';
-  document.getElementById('customName').value = qp.name;
-  document.getElementById('customCat').value = qp.cat;
-  const saveBtn = document.getElementById('saveQuickPickBtn');
-  if (saveBtn) saveBtn.textContent = '✎ Update Quick Pick';
-  renderQuickPicks();
-  autoFocus(document.getElementById('customName'));
-}
-
-function exitQuickPickEdit() {
-  _editingQuickPickIdx = null;
-  document.getElementById('customIcon').value = '';
-  const saveBtn = document.getElementById('saveQuickPickBtn');
-  if (saveBtn) saveBtn.textContent = '☆ Save as Quick Pick';
-}
-
-function toggleQuickPickManage() {
-  quickPickEditMode = !quickPickEditMode;
-  const btn = document.getElementById('quickPickManageBtn');
-  if (btn) {
-    btn.textContent = quickPickEditMode ? 'Done' : 'Manage';
-    btn.classList.toggle('active', quickPickEditMode);
-  }
-  if (!quickPickEditMode) exitQuickPickEdit();
-  renderQuickPicks();
-}
-
-function removeQuickPick(idx) {
-  const removed = QUICK_PICKS.splice(idx, 1)[0];
-  saveQuickPicks();
-  if (_editingQuickPickIdx === idx) exitQuickPickEdit();
-  else if (_editingQuickPickIdx !== null && idx < _editingQuickPickIdx) _editingQuickPickIdx--;
-  renderQuickPicks();
-  if (removed) notify(`Removed — ${removed.name}`);
-}
-
-function saveCurrentAsQuickPick() {
-  const name = document.getElementById('customName').value.trim();
-  if (!name) { document.getElementById('customName').focus(); return; }
-  const cat = document.getElementById('customCat').value;
-  const iconInput = document.getElementById('customIcon').value.trim();
-  const icon = iconInput || CATEGORY_ICONS[cat] || '⭐';
-  const dupIdx = QUICK_PICKS.findIndex(qp => qp.name.toLowerCase() === name.toLowerCase());
-
-  if (_editingQuickPickIdx !== null) {
-    // Updating an existing quick pick — allow keeping its own name, but not
-    // colliding with a different one.
-    if (dupIdx !== -1 && dupIdx !== _editingQuickPickIdx) {
-      notify(`Already a quick pick — ${name}`);
-      return;
-    }
-    QUICK_PICKS[_editingQuickPickIdx] = { name, cat, icon };
-    saveQuickPicks();
-    exitQuickPickEdit();
-    document.getElementById('customName').value = '';
-    renderQuickPicks();
-    notify(`✎ Updated Quick Pick — ${name}`);
-    return;
+  let cloudOk = true;
+  if (currentUser && sb) {
+    try {
+      const { data, error } = await sb.from('user_exercises').select('quick_picks').eq('user_id', currentUser.id).maybeSingle();
+      if (error) cloudOk = false;
+      else if (Array.isArray(data?.quick_picks)) picks = picks.concat(data.quick_picks);
+    } catch(e) { cloudOk = false; }
   }
 
-  if (dupIdx !== -1) {
-    notify(`Already a quick pick — ${name}`);
-    return;
-  }
-  QUICK_PICKS.push({ name, cat, icon });
-  saveQuickPicks();
-  document.getElementById('customIcon').value = '';
-  renderQuickPicks();
-  notify(`☆ Added to Quick Pick — ${name}`);
-}
+  const added = mergeQuickPicksIntoExercises(picks);
+  if (!cloudOk) return; // couldn't see the cloud copy — try again next load rather than miss some
 
-function applyCustomTemplate(name, cat) {
-  document.getElementById('customIcon').value = '';
-  document.getElementById('customName').value = name;
-  document.getElementById('customCat').value = cat;
-  autoFocus(document.getElementById('customName'));
+  // Make sure the new exercises actually reached the cloud before retiring the old copy
+  if (added && currentUser && sb) {
+    clearTimeout(_exercisesSyncTimer);
+    await pushExercisesToDB();
+    let stillDirty = false;
+    try { stillDirty = localStorage.getItem('wbw_exercises_dirty') === '1'; } catch(e) {}
+    if (stillDirty) return;
+  }
+
+  try { localStorage.removeItem('wbw_quickpicks'); localStorage.setItem('wbw_qp_merged', '1'); } catch(e) {}
+  if (currentUser && sb) {
+    try {
+      await sb.from('user_exercises').upsert({ user_id: currentUser.id, quick_picks: [], updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    } catch(e) { console.error('clearing cloud quick_picks failed:', e); }
+  }
+  if (added) notify(`${added} Quick Pick${added === 1 ? '' : 's'} moved to your exercise list`);
 }
 
 function logDateSuffix(loggedAt) {
@@ -5142,14 +5076,20 @@ function logDateSuffix(loggedAt) {
 function logCustomActivity() {
   const name = document.getElementById('customName').value.trim();
   if (!name) { document.getElementById('customName').focus(); return; }
-  const cat = document.getElementById('customCat').value;
-  const ex = { name, category: cat, note: '' };
+  const cats = getCustomCats();
+  const icon = document.getElementById('customIcon').value.trim();
+  const saveToList = document.getElementById('customSaveToList').checked;
+  const ex = { name, category: cats[0], categories: cats, note: '' };
+  if (icon) ex.icon = icon;
+  document.getElementById('customSaveToList').checked = false;
   closeManualLog();
   setTimeout(() => {
     openWorkoutModal(ex, (details, loggedAt, _q, cancelled) => {
       if (cancelled) return;
       logDetailsBatch(ex, 'manual', details, loggedAt);
-      notify(`✓ Logged — ${name}${logDateSuffix(loggedAt)}`);
+      // Only added once the log is actually saved, so cancelling leaves your list alone
+      const saved = saveToList && addCustomToExerciseList(ex);
+      notify(`✓ Logged — ${name}${logDateSuffix(loggedAt)}${saved ? ' · added to exercise list' : ''}`);
     }, recentSetsPrefill(ex.name), null, true);
   }, 150);
 }
@@ -5172,8 +5112,17 @@ function filterPicker(query) {
       return ci !== 0 ? ci : a.name.localeCompare(b.name);
     });
   const list = document.getElementById('pickerList');
+
+  // Typing a name that isn't in the list offers to log it as a new activity
+  const typed = query.trim();
+  const exact = typed && EXERCISES.some(e => e.name.toLowerCase() === typed.toLowerCase());
+  const newRow = (typed && !exact)
+    ? `<div class="picker-item picker-new" data-newname="${escapeHtml(typed)}">＋ Log “${escapeHtml(typed)}” as a new activity</div>`
+    : '';
+
   if (matches.length === 0) {
-    list.innerHTML = '<div class="picker-empty">No matches</div>';
+    list.innerHTML = newRow || '<div class="picker-empty">No matches</div>';
+    list.querySelectorAll('.picker-new').forEach(el => el.addEventListener('click', () => startNewActivity(el.dataset.newname)));
     return;
   }
   list.innerHTML = matches.map(ex => {
@@ -5182,14 +5131,24 @@ function filterPicker(query) {
     const safeName = escapeHtml(ex.name);
     return `<div class="picker-item${done ? ' done-today' : ''}" data-exname="${safeName}">
       <span class="editor-item-cat" style="background:${color}">${escapeHtml(ex.category)}</span>
-      <span>${safeName}</span>
+      <span>${ex.icon ? escapeHtml(ex.icon) + ' ' : ''}${safeName}</span>
     </div>`;
-  }).join('');
+  }).join('') + newRow;
 
   // Attach click handlers after rendering
   list.querySelectorAll('.picker-item').forEach(el => {
-    el.addEventListener('click', () => selectManualExercise(el.dataset.exname));
+    if (el.dataset.newname !== undefined) el.addEventListener('click', () => startNewActivity(el.dataset.newname));
+    else el.addEventListener('click', () => selectManualExercise(el.dataset.exname));
   });
+}
+
+// Opens the new-activity panel with the typed name filled in and everything else fresh
+function startNewActivity(name) {
+  document.getElementById('customName').value = name;
+  document.getElementById('customIcon').value = '';
+  setCustomCats(['Cardio']);
+  document.getElementById('customSaveToList').checked = false;
+  switchPickerTab('custom');
 }
 
 function selectManualExercise(name) {
@@ -5305,9 +5264,9 @@ async function initApp() {
   // Settings and exercises can both affect how today's queue gets built
   // (shuffle toggle, exercise list) so both need to resolve first.
   await Promise.all([loadSettingsFromDB(), loadExercisesFromDB()]);
-  // Quick Picks and recent-sets memory don't affect queue building — let
-  // them resolve in the background instead of blocking startup.
-  loadQuickPicksFromDB();
+  // Recent-sets memory and the one-time Quick Pick merge don't affect queue
+  // building — let them resolve in the background instead of blocking startup.
+  migrateQuickPicksIntoExercises();
   loadRecentSetsFromDB();
   rebuildQueue();
   loadState();
@@ -5427,6 +5386,22 @@ function bindStaticButtons() {
 
   document.querySelector('.editor-add-btn[data-action="addExercise"]')?.addEventListener('click', addExercise);
   document.getElementById('addExerciseToggle')?.addEventListener('click', toggleAddExercise);
+  document.querySelectorAll('#recCustomCatGrid .cat-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const grid = btn.parentElement;
+      const willBeActive = !btn.classList.contains('active');
+      if (!willBeActive && grid.querySelectorAll('.cat-chip.active').length <= 1) return;
+      btn.classList.toggle('active', willBeActive);
+    });
+  });
+  document.querySelectorAll('#customCatGrid .cat-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const grid = btn.parentElement;
+      const willBeActive = !btn.classList.contains('active');
+      if (!willBeActive && grid.querySelectorAll('.cat-chip.active').length <= 1) return;
+      btn.classList.toggle('active', willBeActive);
+    });
+  });
   document.querySelectorAll('#newExCatGrid .cat-chip').forEach(btn => {
     btn.addEventListener('click', () => {
       const grid = btn.parentElement;
@@ -5437,9 +5412,6 @@ function bindStaticButtons() {
     });
   });
   document.querySelector('.editor-add-btn[data-action="logCustom"]')?.addEventListener('click', logCustomActivity);
-  document.querySelector('.editor-add-btn[data-action="saveQuickPick"]')?.addEventListener('click', saveCurrentAsQuickPick);
-  document.getElementById('quickPickManageBtn')?.addEventListener('click', toggleQuickPickManage);
-  renderQuickPicks();
 
   document.querySelector('#historyModal .btn-modal-close')?.addEventListener('click', closeHistory);
   document.querySelector('#workoutModal .btn-modal-close')?.addEventListener('click', () => closeWorkoutModal('cancel'));
@@ -5465,8 +5437,7 @@ function bindStaticButtons() {
   $('pickerSearch')   ?.addEventListener('input', e => filterPicker(e.target.value));
   $('historySearch')  ?.addEventListener('input', applyHistorySearch);
 
-  $('tabFromList')?.addEventListener('click', () => switchPickerTab('list'));
-  $('tabCustom')  ?.addEventListener('click', () => switchPickerTab('custom'));
+  $('pickerBack')?.addEventListener('click', () => { switchPickerTab('list'); autoFocus($('pickerSearch')); });
 
   $('editorModalClose')?.addEventListener('click', closeEditor);
   $('editorModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeEditor(); });
@@ -5475,8 +5446,7 @@ function bindStaticButtons() {
   document.querySelector('[data-action="closeRecords"]')?.addEventListener('click', closeRecords);
   document.querySelector('[data-action="openRecordPicker"]')?.addEventListener('click', openRecordPicker);
   document.querySelector('#recordPickerModal .btn-modal-close')?.addEventListener('click', closeRecordPicker);
-  $('recPickerTabList')  ?.addEventListener('click', () => switchRecordPickerTab('list'));
-  $('recPickerTabCustom')?.addEventListener('click', () => switchRecordPickerTab('custom'));
+  $('recPickerBack')?.addEventListener('click', () => { switchRecordPickerTab('list'); autoFocus($('recPickerSearch')); });
   document.querySelector('[data-action="selectRecordCustom"]')?.addEventListener('click', selectRecordCustom);
   $('recordPickerModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecordPicker(); });
   $('recordsModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecords(); });
