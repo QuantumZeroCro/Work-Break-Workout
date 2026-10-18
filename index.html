@@ -1241,7 +1241,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.81</div>
+    <div class="app-version">v0.82</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1392,6 +1392,7 @@
       <button type="button" class="cat-chip" data-cat="Mobility">🤸 Mobility</button>
       <button type="button" class="cat-chip" data-cat="Grip">✊ Grip</button>
       <button type="button" class="cat-chip" data-cat="Skill">🤾 Skill</button>
+      <button type="button" class="cat-chip" data-cat="Multi">🧩 Multi</button>
     </div>
     <input id="newExNote" class="editor-full-row" placeholder="Note (optional)" autocomplete="off" />
     <label class="modal-checkbox-row editor-full-row">
@@ -1520,6 +1521,7 @@
         <button type="button" class="cat-chip" data-cat="Mobility">🤸 Mobility</button>
         <button type="button" class="cat-chip" data-cat="Grip">✊ Grip</button>
         <button type="button" class="cat-chip" data-cat="Skill">🤾 Skill</button>
+        <button type="button" class="cat-chip" data-cat="Multi">🧩 Multi</button>
         </div>
         <label class="modal-checkbox-row">
           <input type="checkbox" id="recCustomSaveToList" />
@@ -1563,6 +1565,7 @@
           <button type="button" class="cat-chip" data-cat="Mobility">🤸 Mobility</button>
           <button type="button" class="cat-chip" data-cat="Grip">✊ Grip</button>
           <button type="button" class="cat-chip" data-cat="Skill">🤾 Skill</button>
+          <button type="button" class="cat-chip" data-cat="Multi">🧩 Multi</button>
         </div>
         <label class="modal-checkbox-row">
           <input type="checkbox" id="customSaveToList" />
@@ -1811,17 +1814,30 @@ async function loadPersonalRecords() {
     const { data, error } = await sb.from('personal_records')
       .select('exercise_name, reps, duration_seconds, weight')
       .eq('user_id', currentUser.id);
-    if (error || !data) return;
-    personalRecords = {};
+    if (error || !data) throw new Error(error ? error.message : 'no data');
+    const fromDb = {};
     data.forEach(r => {
-      personalRecords[r.exercise_name] = {
+      fromDb[r.exercise_name] = {
         bestReps:   r.reps   || 0,
         bestDur:    r.duration_seconds || 0,
         bestWeight: r.weight || 0,
       };
     });
+    // Anything beaten before this finished loading is kept (best of both), never replaced
+    Object.entries(personalRecords).forEach(([n, local]) => {
+      const d = fromDb[n] || { bestReps: 0, bestDur: 0, bestWeight: 0 };
+      fromDb[n] = { bestReps: Math.max(d.bestReps, local.bestReps), bestDur: Math.max(d.bestDur, local.bestDur), bestWeight: Math.max(d.bestWeight, local.bestWeight) };
+    });
+    personalRecords = fromDb;
+    _recordsLoaded = true;
+    _pendingRecordPush.forEach(pushRecord);
+    _pendingRecordPush.clear();
     updateExerciseDisplay();
-  } catch(e) { console.error('records cache error:', e); }
+  } catch(e) {
+    console.error('records cache error:', e);
+    // Couldn't read the stored highscores: don't save anything over them this round — try again shortly
+    if (!_recordsLoaded && _recordsLoadTries++ < 3) setTimeout(loadPersonalRecords, 4000 * _recordsLoadTries);
+  }
 }
 
 function updateRecordCache(name, detail) {
@@ -1841,18 +1857,29 @@ function updateRecordCache(name, detail) {
   if (durBeat)    rec.bestDur    = newDur;
   if (weightBeat) rec.bestWeight = newWeight;
 
-  // Persist to personal_records if any field improved
+  // Persist to personal_records if any field improved. Until the stored highscores have been
+  // loaded, the cache only knows what happened this session — saving now would overwrite a real
+  // best with a lower number — so it waits and goes out right after the load (see loadPersonalRecords).
   if (currentUser && (repsBeat || durBeat || weightBeat)) {
-    sb.from('personal_records').upsert({
-      user_id:          currentUser.id,
-      exercise_name:    name,
-      reps:             rec.bestReps   || null,
-      duration_seconds: rec.bestDur    || null,
-      weight:           rec.bestWeight || null,
-      updated_at:       new Date().toISOString(),
-    }, { onConflict: 'user_id,exercise_name' })
-    .then(({ error }) => { if (error) console.error('record upsert error:', error); });
+    if (_recordsLoaded) pushRecord(name); else _pendingRecordPush.add(name);
   }
+}
+
+let _recordsLoaded = false;
+let _recordsLoadTries = 0;
+const _pendingRecordPush = new Set();
+function pushRecord(name) {
+  const rec = personalRecords[name];
+  if (!rec || !currentUser) return;
+  sb.from('personal_records').upsert({
+    user_id:          currentUser.id,
+    exercise_name:    name,
+    reps:             rec.bestReps   || null,
+    duration_seconds: rec.bestDur    || null,
+    weight:           rec.bestWeight || null,
+    updated_at:       new Date().toISOString(),
+  }, { onConflict: 'user_id,exercise_name' })
+  .then(({ error }) => { if (error) console.error('record upsert error:', error); });
 }
 async function syncLogToDB(entry) {
   if (!currentUser) return;
@@ -2247,7 +2274,7 @@ async function loadExercisesFromDB() {
 const CATEGORY_COLORS = {
   Cardio: "#f43f5e", Mobility: "#10b981", Grip: "#f59e0b",
   Pulling: "#8b5cf6", Pushing: "#3b82f6", Legs: "#06b6d4",
-  Core: "#ec4899", Back: "#f97316", Skill: "#a78bfa"
+  Core: "#ec4899", Back: "#f97316", Skill: "#a78bfa", Multi: "#14b8a6"
 };
 
 // Combined sync for today's queue position (currentIdx/streak/skips) and app
@@ -2351,7 +2378,7 @@ function shuffle(arr) {
   return a;
 }
 
-const BUCKET_ORDER = ['Cardio', 'Pushing', 'Pulling', 'Legs', 'Core', 'Back', 'Mobility', 'Grip', 'Skill'];
+const BUCKET_ORDER = ['Cardio', 'Pushing', 'Pulling', 'Legs', 'Core', 'Back', 'Mobility', 'Grip', 'Skill', 'Multi'];
 
 // Seeded random using today's date — same shuffle every time you open the app today
 function seededRandom(seed) {
@@ -2391,7 +2418,9 @@ function buildDailyQueue(sourceExercises) {
   });
 
   const result = [];
-  let remaining = [...BUCKET_ORDER];
+  // Multi only takes part in the shuffle when something in it is in rotation — otherwise the day's
+  // order stays exactly what it was before the category existed.
+  let remaining = BUCKET_ORDER.filter(cat => cat !== 'Multi' || buckets[cat].length > 0);
   while (remaining.length > 0) {
     const roundOrder = seededShuffle(remaining, rng);
     const stillRemaining = [];
@@ -2616,7 +2645,7 @@ function logDetailsBatch(ex, how, details, loggedAt) {
   details.forEach((detail, i) => {
     addToLog(ex, how, detail, new Date(base.getTime() + i));
   });
-  saveRecentSets(ex.name, details);
+  saveRecentSets(ex.name, details, base.getTime());
 }
 
 // Remembers the sets from your most recent log of each exercise, so the next
@@ -2626,21 +2655,69 @@ function logDetailsBatch(ex, how, details, loggedAt) {
 // last_logged_type jsonb column — no longer used for its original purpose,
 // repurposed here rather than requiring a schema change) so it's available
 // on every device, not just the one you logged from.
+// Only keep well-formed entries ({repSets[], durSets[], at}). The cloud column this lives in
+// (last_logged_type) held something else in older versions, and a stray old copy of the app can
+// still write that shape — which used to land here as a string and silently kill the prefill.
+function cleanRecentSets(obj) {
+  const out = {};
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return out;
+  Object.entries(obj).forEach(([name, r]) => {
+    if (!r || typeof r !== 'object' || !(Array.isArray(r.repSets) || Array.isArray(r.durSets))) return;
+    out[name] = {
+      repSets: Array.isArray(r.repSets) ? r.repSets : [],
+      durSets: Array.isArray(r.durSets) ? r.durSets : [],
+      at: typeof r.at === 'number' ? r.at : 0,   // when the workout happened (0 = from before this was tracked)
+    };
+  });
+  return out;
+}
+
 let recentSets = (() => {
   try {
     const raw = localStorage.getItem('wbw_recent_sets');
-    if (raw) return JSON.parse(raw);
+    if (raw) return cleanRecentSets(JSON.parse(raw));
   } catch(e) {}
   return {};
 })();
 
-function saveRecentSets(name, details) {
+function persistRecentSets() {
+  try { localStorage.setItem('wbw_recent_sets', JSON.stringify(recentSets)); } catch(e) {}
+  syncRecentSetsToDB();
+}
+
+// atMs = when the workout actually happened. A backfilled older workout must not replace a newer
+// "recent". A log with only reps keeps the last durations (and the other way round).
+function saveRecentSets(name, details, atMs) {
   const repSets = details.filter(d => d.reps != null).map(d => ({ reps: d.reps, weight: d.weight || 0 }));
   const durSets = details.filter(d => d.duration_seconds != null).map(d => ({ duration_seconds: d.duration_seconds, weight: d.weight || 0 }));
   if (repSets.length === 0 && durSets.length === 0) return;
-  recentSets[name] = { repSets, durSets };
-  try { localStorage.setItem('wbw_recent_sets', JSON.stringify(recentSets)); } catch(e) {}
-  syncRecentSetsToDB();
+  const at = atMs || Date.now();
+  const prev = recentSets[name];
+  if (prev && prev.at > at) return;
+  recentSets[name] = {
+    repSets: repSets.length ? repSets : (prev ? prev.repSets : []),
+    durSets: durSets.length ? durSets : (prev ? prev.durSets : []),
+    at,
+  };
+  persistRecentSets();
+}
+
+// Fixing a typo in a logged set should fix what gets prefilled next time too. Only touches a set
+// that matches the entry's old values, so it can never overwrite something unrelated.
+function updateRecentSetsAfterEdit(name, oldD, newD) {
+  const r = recentSets[name];
+  if (!r || !oldD || !newD) return;
+  const same = (a, b) => String(a ?? '') === String(b ?? '');
+  let changed = false;
+  if (oldD.reps != null && newD.reps != null) {
+    const i = r.repSets.findIndex(x => same(x.reps, oldD.reps) && same(x.weight || 0, oldD.weight || 0));
+    if (i >= 0) { r.repSets[i] = { reps: newD.reps, weight: newD.weight || 0 }; changed = true; }
+  }
+  if (oldD.duration_seconds != null && newD.duration_seconds != null) {
+    const i = r.durSets.findIndex(x => same(x.duration_seconds, oldD.duration_seconds) && same(x.weight || 0, oldD.weight || 0));
+    if (i >= 0) { r.durSets[i] = { duration_seconds: newD.duration_seconds, weight: newD.weight || 0 }; changed = true; }
+  }
+  if (changed) persistRecentSets();
 }
 
 function recentSetsPrefill(name) {
@@ -2658,19 +2735,45 @@ function recentSetsPrefill(name) {
   return (prefill.repSets || prefill.durSets) ? prefill : null;
 }
 
+let _recentSetsSyncPending = false;
+async function pushRecentSetsToDB() {
+  _recentSetsSyncPending = false;
+  try {
+    const { error } = await sb.from('user_exercises').upsert({
+      user_id: currentUser.id,
+      last_logged_type: recentSets,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    if (error) console.error('syncRecentSetsToDB error:', error);
+  } catch(e) { console.error('syncRecentSetsToDB exception:', e); }
+}
 function syncRecentSetsToDB() {
   if (!currentUser) return; // local-only until signed in; loadRecentSetsFromDB will merge on next sign-in
   clearTimeout(_recentSetsSyncTimer);
-  _recentSetsSyncTimer = setTimeout(async () => {
-    try {
-      const { error } = await sb.from('user_exercises').upsert({
-        user_id: currentUser.id,
-        last_logged_type: recentSets,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
-      if (error) console.error('syncRecentSetsToDB error:', error);
-    } catch(e) { console.error('syncRecentSetsToDB exception:', e); }
-  }, 400);
+  _recentSetsSyncPending = true;
+  _recentSetsSyncTimer = setTimeout(pushRecentSetsToDB, 400);
+}
+// Same as the exercise list: if the page is backgrounded inside the 400ms wait (easy on a phone)
+// the push never happens and the next load brings back the older cloud copy. Send it right away.
+function flushRecentSetsSync() {
+  if (!_recentSetsSyncPending || !currentUser) return;
+  clearTimeout(_recentSetsSyncTimer);
+  pushRecentSetsToDB();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushRecentSetsSync(); });
+window.addEventListener('pagehide', flushRecentSetsSync);
+
+// Newest workout wins, per exercise (ties keep this device's copy). The cloud copy used to win
+// outright, so anything logged here that hadn't reached the cloud yet was replaced by an older value.
+function mergeRecentSets(local, cloud) {
+  const merged = { ...local };
+  Object.entries(cloud).forEach(([name, c]) => {
+    const l = local[name];
+    if (!l || c.at > l.at) merged[name] = c;
+  });
+  const needsPush = Object.keys(local).some(name => !cloud[name] || local[name].at > cloud[name].at)
+    || Object.keys(cloud).length === 0 && Object.keys(local).length > 0;
+  return { merged, needsPush };
 }
 
 // Loads recent-sets from the DB on sign-in so "what did I do last time" works
@@ -2683,12 +2786,11 @@ async function loadRecentSetsFromDB() {
       .eq('user_id', currentUser.id)
       .maybeSingle();
     if (error) { console.error('loadRecentSetsFromDB error:', error); return; }
-    if (data?.last_logged_type && typeof data.last_logged_type === 'object') {
-      // Merge rather than overwrite, so anything logged locally before this
-      // finished loading isn't lost
-      recentSets = { ...recentSets, ...data.last_logged_type };
-      try { localStorage.setItem('wbw_recent_sets', JSON.stringify(recentSets)); } catch(e) {}
-    }
+    const cloud = cleanRecentSets(data?.last_logged_type);
+    const { merged, needsPush } = mergeRecentSets(recentSets, cloud);
+    recentSets = merged;
+    try { localStorage.setItem('wbw_recent_sets', JSON.stringify(recentSets)); } catch(e) {}
+    if (needsPush) syncRecentSetsToDB(); // cloud is behind (or held junk) — bring it up to date
   } catch(e) { console.error('loadRecentSetsFromDB exception:', e); }
 }
 
@@ -3235,6 +3337,8 @@ function editLogEntryForKey(key, idx) {
   openWorkoutModal(ex, async (details, loggedAt) => {
     const detail = details?.[0] || null;
     if (!detail) return;
+    updateRecentSetsAfterEdit(entry.name, entry.detail, detail);
+    updateRecordCache(entry.name, detail); // an edit can set a new best too (never lowers one)
     entry.detail = detail;
     let newKey = key;
     if (loggedAt) {
@@ -4064,7 +4168,13 @@ function renderEditorList() {
   }
 
   const inRotation = sorted.filter(({ ex }) => ex.inRotation !== false);
-  const excluded = sorted.filter(({ ex }) => ex.inRotation === false);
+  // Not-in-rotation column: exercises with an icon first, then the rest — each group still A–Z
+  // (`sorted` is already A–Z, and filtering keeps that order)
+  const excludedAll = sorted.filter(({ ex }) => ex.inRotation === false);
+  const excluded = [
+    ...excludedAll.filter(({ ex }) => ex.icon),
+    ...excludedAll.filter(({ ex }) => !ex.icon),
+  ];
 
   const leftHtml = inRotation.length
     ? inRotation.map(({ ex, origIdx }) => renderItem(ex, origIdx)).join('')
@@ -4880,6 +4990,8 @@ async function editHistoryEntry(btn) {
     const detail = details?.[0] || null;
     if (!detail) return;
 
+    updateRecentSetsAfterEdit(entry.name, entry.detail, detail);
+    updateRecordCache(entry.name, detail); // an edit can set a new best too (never lowers one)
     entry.detail = detail;
     let newKey = oldKey;
     if (loggedAt) {
@@ -4962,7 +5074,7 @@ function switchPickerTab(tab) {
 
 const CATEGORY_ICONS = {
   Cardio: '🏃', Core: '🧘', Pushing: '💪', Pulling: '🏋️',
-  Legs: '🦵', Back: '🧍', Mobility: '🤸', Grip: '✊', Skill: '🤾'
+  Legs: '🦵', Back: '🧍', Mobility: '🤸', Grip: '✊', Skill: '🤾', Multi: '🧩'
 };
 
 // Categories ticked in the custom-activity chip grid (always at least one;
@@ -5017,8 +5129,8 @@ function mergeQuickPicksIntoExercises(picks) {
   (Array.isArray(picks) ? picks : []).forEach(qp => {
     const name = ((qp && qp.name) || '').trim();
     if (!name || have.has(name.toLowerCase())) return;
-    const cats = Array.isArray(qp.cats) && qp.cats.length ? qp.cats : [qp.cat || 'Cardio'];
-    const ex = { name, category: cats[0], categories: cats, note: '—', inRotation: false };
+    // Quick Picks could be anything (sport, chore, workout), so they all become "Multi"
+    const ex = { name, category: 'Multi', categories: ['Multi'], note: '—', inRotation: false };
     if (qp.icon) ex.icon = qp.icon;
     EXERCISES.push(ex);
     have.add(name.toLowerCase());
@@ -5029,7 +5141,7 @@ function mergeQuickPicksIntoExercises(picks) {
 }
 
 async function migrateQuickPicksIntoExercises() {
-  try { if (localStorage.getItem('wbw_qp_merged') === '1') return; } catch(e) {}
+  try { if (localStorage.getItem('wbw_qp_merged') === '1') return { finished: true, found: -1 }; } catch(e) {}
 
   let picks = [];
   try {
@@ -5047,7 +5159,7 @@ async function migrateQuickPicksIntoExercises() {
   }
 
   const added = mergeQuickPicksIntoExercises(picks);
-  if (!cloudOk) return; // couldn't see the cloud copy — try again next load rather than miss some
+  if (!cloudOk) return { finished: false, found: picks.length }; // couldn't see the cloud copy — try again next load rather than miss some
 
   // Make sure the new exercises actually reached the cloud before retiring the old copy
   if (added && currentUser && sb) {
@@ -5055,7 +5167,7 @@ async function migrateQuickPicksIntoExercises() {
     await pushExercisesToDB();
     let stillDirty = false;
     try { stillDirty = localStorage.getItem('wbw_exercises_dirty') === '1'; } catch(e) {}
-    if (stillDirty) return;
+    if (stillDirty) return { finished: false, found: picks.length };
   }
 
   try { localStorage.removeItem('wbw_quickpicks'); localStorage.setItem('wbw_qp_merged', '1'); } catch(e) {}
@@ -5065,6 +5177,109 @@ async function migrateQuickPicksIntoExercises() {
     } catch(e) { console.error('clearing cloud quick_picks failed:', e); }
   }
   if (added) notify(`${added} Quick Pick${added === 1 ? '' : 's'} moved to your exercise list`);
+  return { finished: true, found: picks.length };
+}
+
+// The activities that were Quick Picks (names/icons read from the old Log window). All "Multi".
+const LOST_QUICK_PICKS = [
+  { name: 'Volleyball', cat: 'Multi', icon: '🏐' }, { name: 'Padel', cat: 'Multi', icon: '🎾' },
+  { name: 'Running', cat: 'Multi', icon: '🏃' },    { name: 'Sprint', cat: 'Multi', icon: '⚡' },
+  { name: 'Cycling', cat: 'Multi', icon: '🚴' },    { name: 'Walking', cat: 'Multi', icon: '🚶' },
+  { name: 'Hiking', cat: 'Multi', icon: '🥾' },     { name: 'Swimming', cat: 'Multi', icon: '🏊' },
+  { name: 'SPI30D', cat: 'Multi', icon: '🐷' },       { name: 'Basketball', cat: 'Multi', icon: '🏀' },
+  { name: 'Cleaning', cat: 'Multi', icon: '🧹' },   { name: 'Labor', cat: 'Multi', icon: '⛏️' },
+];
+
+// Safety net, runs once: on at least one device the old Quick Picks were already gone by the time
+// the merge ran, so nothing came across. If this is an established account (it had run the merge
+// before, or it has history but the merge found no picks anywhere) and none of those activities
+// are in the exercise list, put them back as not-in-rotation exercises.
+// Builds with the Multi category weren't out yet when some devices restored these, so they may
+// still carry the old Cardio/Core guess. Switch the former Quick Picks to Multi, once.
+function convertQuickPickCategoriesToMultiOnce() {
+  try { if (localStorage.getItem('wbw_qp_multi') === '1') return; } catch(e) { return; }
+  const names = new Set(LOST_QUICK_PICKS.map(q => q.name.toLowerCase()));
+  let changed = 0;
+  EXERCISES.forEach((ex, i) => {
+    if (names.has(ex.name.toLowerCase()) && ex.inRotation === false && ex.category !== 'Multi') {
+      EXERCISES[i] = { ...ex, category: 'Multi', categories: ['Multi'] };
+      changed++;
+    }
+  });
+  try { localStorage.setItem('wbw_qp_multi', '1'); } catch(e) {}
+  if (changed) {
+    saveExercises();
+    if (document.getElementById('editorModal')?.classList.contains('open')) renderEditorList();
+  }
+}
+
+// Once: activities that have a highscore but aren't in the exercise list (typed one-offs, deleted or
+// renamed exercises) get added as not-in-rotation exercises so they can be managed like the rest.
+// Category = the last time you logged it, else the highscore's own category, else Multi — never blank.
+async function importHighscoreActivitiesOnce() {
+  try { if (localStorage.getItem('wbw_hs_imported') === '1') return; } catch(e) { return; }
+  if (!currentUser || !sb) return; // highscores live in the cloud — try again once signed in
+
+  let records;
+  try {
+    const { data, error } = await sb.from('personal_records')
+      .select('exercise_name, category, reps, duration_seconds')
+      .eq('user_id', currentUser.id);
+    if (error) return;
+    // same rule the Highscores list uses to decide what is shown
+    records = (data || []).filter(r => (r.reps && r.reps > 0) || (r.duration_seconds && r.duration_seconds > 0));
+  } catch(e) { return; }
+
+  const have = new Set(EXERCISES.map(e => e.name.toLowerCase()));
+  const missing = [];
+  const seen = new Set();
+  records.forEach(r => {
+    const name = (r.exercise_name || '').trim();
+    const key = name.toLowerCase();
+    if (!name || have.has(key) || seen.has(key)) return;
+    seen.add(key);
+    missing.push({ name, recCat: r.category });
+  });
+
+  const done = () => { try { localStorage.setItem('wbw_hs_imported', '1'); } catch(e) {} };
+  if (missing.length === 0) { done(); return; }
+
+  const lastLogCat = {};
+  try {
+    const { data, error } = await sb.from('workout_log')
+      .select('exercise_name, category, logged_at')
+      .eq('user_id', currentUser.id)
+      .in('exercise_name', missing.map(m => m.name))
+      .order('logged_at', { ascending: false });
+    if (error) return; // can't read the log — retry next load rather than guess every category
+    (data || []).forEach(r => { if (r.category && !(r.exercise_name in lastLogCat)) lastLogCat[r.exercise_name] = r.category; });
+  } catch(e) { return; }
+
+  const valid = c => BUCKET_ORDER.includes(c);
+  missing.forEach(m => {
+    const cat = valid(lastLogCat[m.name]) ? lastLogCat[m.name] : (valid(m.recCat) ? m.recCat : 'Multi');
+    EXERCISES.push({ name: m.name, category: cat, categories: [cat], note: '—', inRotation: false });
+  });
+  saveExercises();
+  done();
+  notify(`${missing.length} highscore activit${missing.length === 1 ? 'y' : 'ies'} added to your exercise list`);
+  if (document.getElementById('editorModal')?.classList.contains('open')) renderEditorList();
+}
+
+function restoreLostQuickPicksOnce(hadMergedBefore, result) {
+  try { if (localStorage.getItem('wbw_qp_restored') === '1') return; } catch(e) { return; }
+  const established = hadMergedBefore ||
+    (result && result.finished && result.found === 0 && getAllDayKeys().length >= 2);
+  if (!established) return;
+  const have = new Set(EXERCISES.map(e => e.name.toLowerCase()));
+  const anyPresent = LOST_QUICK_PICKS.some(q => have.has(q.name.toLowerCase()));
+  try { localStorage.setItem('wbw_qp_restored', '1'); } catch(e) {}
+  if (anyPresent) return; // the merge worked (or you've already got them) — leave it alone
+  const added = mergeQuickPicksIntoExercises(LOST_QUICK_PICKS);
+  if (added) {
+    notify(`${added} activities restored to your exercise list`);
+    if (document.getElementById('editorModal')?.classList.contains('open')) renderEditorList();
+  }
 }
 
 function logDateSuffix(loggedAt) {
@@ -5173,6 +5388,8 @@ function editLogEntry(idx) {
   openWorkoutModal(ex, (details, loggedAt) => {
     const detail = details?.[0] || null;
     if (!detail) return;
+    updateRecentSetsAfterEdit(entry.name, entry.detail, detail);
+    updateRecordCache(entry.name, detail); // an edit can set a new best too (never lowers one)
     entry.detail = detail;
     let newKey = getTodayKey();
     if (loggedAt) {
@@ -5266,7 +5483,15 @@ async function initApp() {
   await Promise.all([loadSettingsFromDB(), loadExercisesFromDB()]);
   // Recent-sets memory and the one-time Quick Pick merge don't affect queue
   // building — let them resolve in the background instead of blocking startup.
-  migrateQuickPicksIntoExercises();
+  let hadMergedBefore = false;
+  try { hadMergedBefore = localStorage.getItem('wbw_qp_merged') === '1'; } catch(e) {}
+  migrateQuickPicksIntoExercises().catch(() => null)
+    .then(result => {
+      restoreLostQuickPicksOnce(hadMergedBefore, result);
+      convertQuickPickCategoriesToMultiOnce();
+      return importHighscoreActivitiesOnce();
+    })
+    .catch(e => console.error('one-time exercise cleanup failed:', e));
   loadRecentSetsFromDB();
   rebuildQueue();
   loadState();
