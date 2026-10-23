@@ -1125,6 +1125,38 @@
     gap: 4px;
   }
 
+  /* ── Category dots / grouped sets ── */
+  .cat-dots { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
+  .picker-cats { display: flex; flex-wrap: wrap; gap: 4px; flex-shrink: 0; }
+  .q-cat { flex-shrink: 1; min-width: 0; max-width: 50%; }
+  .q-cat-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .set-badge {
+    font-family: 'Space Mono', monospace; font-size: 10px; color: var(--accent2);
+    background: rgba(59,130,246,0.15); border-radius: 20px; padding: 1px 6px; margin-left: 4px; white-space: nowrap;
+  }
+  .group-chevron { color: var(--muted); font-size: 11px; transition: transform 0.15s; display: inline-block; }
+  .log-group.open .group-chevron, .history-group.open .group-chevron { transform: rotate(90deg); }
+  .log-item-group, .history-entry-group { cursor: pointer; }
+  .history-entry-group { flex-wrap: wrap; }
+  .log-sets, .history-sets { display: none; }
+  .log-group.open .log-sets { display: flex; flex-direction: column; gap: 3px; margin: 3px 0 2px 16px; }
+  .log-set {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--surface2); border-radius: 8px;
+    padding: 6px 12px; font-size: 12px;
+  }
+  .log-set-label { color: var(--muted); font-size: 11px; min-width: 38px; }
+  .log-set .log-detail { margin-left: 0; font-size: 11px; flex: 1; }
+  .log-set-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .history-group.open .history-sets { display: block; }
+  .history-set {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 16px 6px 34px; font-size: 12px;
+    border-bottom: 1px solid var(--surface2); background: rgba(255,255,255,0.015);
+  }
+  .history-set-label { color: var(--muted); font-size: 11px; min-width: 38px; }
+  .history-set .history-entry-detail { flex: 1; }
+
   /* ── Inline tag badges (skip / manual) ── */
   .tag-badge {
     font-size: 10px;
@@ -1241,7 +1273,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.82</div>
+    <div class="app-version">v0.83</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -2938,37 +2970,21 @@ function renderLogForKey(key) {
     return;
   }
   const isToday = key === getTodayKey();
-  list.innerHTML = log.map((entry, idx) => {
-    const color = CATEGORY_COLORS[entry.category] || '#60a5fa';
+
+  const singleHtml = (entry, idx) => {
     const skipped = entry.how === 'skip';
     const isManual = entry.how === 'manual';
     const isRepeat = entry.how === 'repeat';
-    const d = entry.detail;
-
-    let detailHtml = '';
-    if (d) {
-      const parts = [];
-      if (d.duration_seconds) {
-        const h = Math.floor(d.duration_seconds / 3600);
-        const m = Math.floor((d.duration_seconds % 3600) / 60);
-        const s = d.duration_seconds % 60;
-        const dur = [h ? `${h}h` : '', m ? `${m}m` : '', s ? `${s}s` : ''].filter(Boolean).join(' ');
-        parts.push(dur);
-      } else if (d.reps) {
-        parts.push(d.sets > 1 ? `${d.sets}×${d.reps}` : d.reps);
-      }
-      if (d.weight > 0) parts.push(`${d.weight}kg`);
-      if (parts.length) detailHtml += `<span class="log-detail">${parts.join(' · ')}</span>`;
-    }
+    const det = formatDetail(entry.detail);
+    const detailHtml = det ? `<span class="log-detail">${det}</span>` : '';
     const skipTag = skipped ? '<span class="tag-badge">skipped</span>' : '';
     const manualTag = isManual ? '<span class="tag-badge">manual</span>' : '';
     const repeatTag = isRepeat ? '<span class="tag-badge" title="Kept in queue to do again today">repeat</span>' : '';
     const editBtn = !skipped ? `<button class="log-again" data-idx="${idx}" data-role="edit">edit</button>` : '';
     const delBtn = `<button class="log-del" data-idx="${idx}" data-role="delete" title="Delete">×</button>`;
-
     return `<div class="log-item">
       <div class="log-item-left">
-        <div class="log-dot" style="background:${color}"></div>
+        ${catDotsHtml(categoriesFor(entry.name, entry.category))}
         <span class="log-name">${iconPrefix(entry.name)}${escapeHtml(entry.name)}</span>
         ${skipTag}${manualTag}${repeatTag}${detailHtml}${editBtn}
       </div>
@@ -2977,7 +2993,38 @@ function renderLogForKey(key) {
         ${delBtn}
       </div>
     </div>`;
-  }).join('');
+  };
+
+  const groupHtml = (g) => {
+    const gkey = `log|${key}|${g.name}`;
+    const last = g.items[g.items.length - 1].e;
+    const summary = formatSetsSummary(g.items.map(i => i.e));
+    const sets = g.items.map((it, n) => {
+      const d = formatDetail(it.e.detail);
+      return `<div class="log-set">
+        <span class="log-set-label">Set ${n + 1}</span>
+        ${d ? `<span class="log-detail">${d}</span>` : ''}
+        <button class="log-again" data-idx="${it.idx}" data-role="edit">edit</button>
+        <span class="log-set-right"><span class="log-time">${it.e.time}</span><button class="log-del" data-idx="${it.idx}" data-role="delete" title="Delete">×</button></span>
+      </div>`;
+    }).join('');
+    return `<div class="log-group${_openGroups.has(gkey) ? ' open' : ''}">
+      <div class="log-item log-item-group" data-role="group-toggle" data-gkey="${escapeHtml(gkey)}">
+        <div class="log-item-left">
+          ${catDotsHtml(categoriesFor(g.name, last.category))}
+          <span class="log-name">${iconPrefix(g.name)}${escapeHtml(g.name)}</span>
+          <span class="set-badge" title="${g.items.length} sets">×${g.items.length}</span>${groupTags(g.items)}
+          ${summary ? `<span class="log-detail">${summary}</span>` : ''}
+        </div>
+        <div class="log-item-right"><span class="log-time">${last.time}</span><span class="group-chevron">▸</span></div>
+      </div>
+      <div class="log-sets">${sets}</div>
+    </div>`;
+  };
+
+  const rows = groupEntriesByExercise(log.map((entry, idx) => ({ e: entry, idx })));
+  list.innerHTML = rows.map(r => r.single ? singleHtml(r.single.e, r.single.idx) : groupHtml(r)).join('');
+  wireGroupToggles(list);
 
   // CSP-safe: wire click handlers instead of inline onclick
   list.querySelectorAll('[data-role="edit"]').forEach(btn => {
@@ -3701,8 +3748,9 @@ function personalBestPrefill(name) {
 function updateExerciseDisplay() {
   const ex = currentIdx < queue.length ? queue[currentIdx] : null;
   if (!ex) return;
-  document.getElementById('exCategory').textContent = ex.category;
-  document.getElementById('exCategory').style.color = CATEGORY_COLORS[ex.category] || '#60a5fa';
+  const exCatList = categoriesFor(ex.name, ex.category);
+  document.getElementById('exCategory').textContent = (exCatList.length ? exCatList : [ex.category]).join(' · ');
+  document.getElementById('exCategory').style.color = CATEGORY_COLORS[exCatList[0] || ex.category] || '#60a5fa';
   document.getElementById('exName').textContent = (exerciseIcon(ex.name) ? exerciseIcon(ex.name) + ' ' : '') + ex.name;
   document.getElementById('exNote').textContent = ex.note;
 
@@ -3737,8 +3785,8 @@ function renderQueue() {
     if (!ex) continue;
     const div = document.createElement('div');
     div.className = 'queue-item' + (i === 0 ? ' next' : '');
-    const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
-    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span><span class="q-name">${iconPrefix(ex.name)}${escapeHtml(ex.name)}</span><span class="q-cat"><span class="q-cat-dot" style="background:${color}"></span>${escapeHtml(ex.category || '')}</span>`;
+    const cats = categoriesFor(ex.name, ex.category);
+    div.innerHTML = `<span class="q-num">${i === 0 ? '▶' : String(i + 1).padStart(2,'0')}</span><span class="q-name">${iconPrefix(ex.name)}${escapeHtml(ex.name)}</span><span class="q-cat">${catDotsHtml(cats)}<span class="q-cat-text">${escapeHtml((cats.length ? cats : [ex.category || '']).join(' · '))}</span></span>`;
     list.appendChild(div);
   }
 }
@@ -4390,7 +4438,7 @@ function applyHistorySearch() {
     if (!q) {
       // Search cleared — put everything back the way it was
       day.style.display = '';
-      day.querySelectorAll('.history-entry').forEach(e => { e.style.display = ''; });
+      day.querySelectorAll('.history-entry').forEach(e => { (e.closest('.history-group') || e).style.display = ''; });
       if (box.dataset.openBefore !== undefined) {
         box.classList.toggle('open', box.dataset.openBefore === '1');
         delete box.dataset.openBefore;
@@ -4405,7 +4453,7 @@ function applyHistorySearch() {
       const text = ((e.querySelector('.history-entry-name')?.textContent || '') + ' ' +
                     (e.querySelector('.history-entry-detail')?.textContent || '')).toLowerCase();
       const hit = text.includes(q);
-      e.style.display = hit ? '' : 'none';
+      (e.closest('.history-group') || e).style.display = hit ? '' : 'none';
       if (hit) matches++;
     });
     day.style.display = matches ? '' : 'none';
@@ -4467,7 +4515,7 @@ function filterRecordPicker(query) {
     const color = CATEGORY_COLORS[ex.category] || '#60a5fa';
     const safeName = escapeHtml(ex.name);
     return `<div class="picker-item" data-exname="${safeName}">
-      <span class="editor-item-cat" style="background:${color}">${escapeHtml(ex.category)}</span>
+      ${catPillsHtml(ex)}
       <span>${ex.icon ? escapeHtml(ex.icon) + ' ' : ''}${safeName}</span>
     </div>`;
   }).join('') + newRow;
@@ -4628,6 +4676,7 @@ async function loadRecordsFromDB() {
 
       return `${header}
         <div class="records-row" id="rec-row-${i}">
+          ${categoriesFor(name, rec.category).length > 1 ? catDotsHtml(categoriesFor(name, rec.category)) : ''}
           <span class="records-name">${iconPrefix(name)}${safeName}</span>
           <div class="records-badges">${badges}</div>
           <button class="record-edit-btn" title="Edit highscore" data-role="rec-edit" data-i="${i}" data-tab="${defaultTab}">✏️</button>
@@ -4794,7 +4843,8 @@ async function renderHistory() {
         detail: (r.reps || r.sets || r.weight || r.duration_seconds)
           ? { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds }
           : null,
-        date: new Date(r.logged_at)
+        date: new Date(r.logged_at),
+        time: (() => { const d = new Date(r.logged_at); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); })()
       }));
     } catch(e) {}
   }
@@ -4834,7 +4884,9 @@ async function renderHistory() {
   const days = Object.keys(byDay).sort().reverse();
   list.innerHTML = days.map((dayKey, di) => {
     const entries = byDay[dayKey];
-    const done = entries.filter(e => e.how !== 'skip').length;
+    const rows = groupEntriesByExercise(entries.map((e, idx) => ({ e, idx })));
+    const done = rows.filter(r => !(r.single && r.single.e.how === 'skip')).length;   // exercises, not sets
+    const setCount = entries.filter(e => e.how !== 'skip').length;
     const skipped = entries.filter(e => e.how === 'skip').length;
     const y = Math.floor(dayKey / 10000), m = Math.floor((dayKey % 10000) / 100), d = dayKey % 100;
     const date = new Date(y, m-1, d);
@@ -4848,37 +4900,50 @@ async function renderHistory() {
       label = parseInt(dayKey) === ySeed ? 'Jučer'
         : `${days[date.getDay()]}, ${d}.${m}.`;
     }
-    const meta = `${done} done${skipped ? `, ${skipped} skipped` : ''}`;
-    const entryRows = entries.map(e => {
-      const color = CATEGORY_COLORS[e.category] || '#60a5fa';
-      const det = e.detail;
-      let detStr = '';
-      if (det) {
-        const parts = [];
-        if (det.duration_seconds) {
-          const h = Math.floor(det.duration_seconds / 3600);
-          const m = Math.floor((det.duration_seconds % 3600) / 60);
-          const s = det.duration_seconds % 60;
-          parts.push([h ? `${h}h` : '', m ? `${m}m` : '', s ? `${s}s` : ''].filter(Boolean).join(' '));
-        } else if (det.reps) {
-          parts.push(det.sets > 1 ? `${det.sets}×${det.reps}` : det.reps);
-        }
-        if (det.weight > 0) parts.push(`${det.weight}kg`);
-        detStr = parts.join(' · ');
-      }
+    const meta = `${done} done${setCount !== done ? ` · ${setCount} sets` : ''}${skipped ? `, ${skipped} skipped` : ''}`;
+    const histBtns = (e, entryIdx) => ({
+      del: `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-delete" title="Delete">×</button>`,
+      edit: e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-edit">edit</button>` : '',
+    });
+    const singleRow = (e, entryIdx) => {
+      const detStr = formatDetail(e.detail);
       const skipTag = e.how === 'skip' ? '<span class="tag-badge">skipped</span>' : '';
       const repeatTag = e.how === 'repeat' ? '<span class="tag-badge" title="Kept in queue to do again that day">repeat</span>' : '';
-      const entryIdx = entries.indexOf(e);
-      const delBtn = `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-delete" title="Delete">×</button>`;
-      const editBtn = e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-edit">edit</button>` : '';
+      const b = histBtns(e, entryIdx);
       return `<div class="history-entry">
-        <div class="log-dot history-dot" style="background:${color}"></div>
+        ${catDotsHtml(categoriesFor(e.name, e.category), ' history-dot')}
         <span class="history-entry-name">${iconPrefix(e.name)}${escapeHtml(e.name)}${skipTag}${repeatTag}</span>
         ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
-        ${editBtn}
-        ${delBtn}
+        ${b.edit}
+        ${b.del}
       </div>`;
-    }).join('');
+    };
+    const groupRow = (g) => {
+      const gkey = `hist|${dayKey}|${g.name}`;
+      const last = g.items[g.items.length - 1].e;
+      const summary = formatSetsSummary(g.items.map(i => i.e));
+      const sets = g.items.map((it, n) => {
+        const b = histBtns(it.e, entries.indexOf(it.e));
+        const d = formatDetail(it.e.detail);
+        return `<div class="history-set">
+          <span class="history-set-label">Set ${n + 1}</span>
+          <span class="history-entry-detail">${d}</span>
+          ${it.e.time ? `<span class="log-time">${it.e.time}</span>` : ''}
+          ${b.edit}
+          ${b.del}
+        </div>`;
+      }).join('');
+      return `<div class="history-group${_openGroups.has(gkey) ? ' open' : ''}">
+        <div class="history-entry history-entry-group" data-role="group-toggle" data-gkey="${escapeHtml(gkey)}">
+          ${catDotsHtml(categoriesFor(g.name, last.category), ' history-dot')}
+          <span class="history-entry-name">${iconPrefix(g.name)}${escapeHtml(g.name)}<span class="set-badge" title="${g.items.length} sets">×${g.items.length}</span>${groupTags(g.items)}</span>
+          ${summary ? `<span class="history-entry-detail">${summary}</span>` : ''}
+          <span class="group-chevron">▸</span>
+        </div>
+        <div class="history-sets">${sets}</div>
+      </div>`;
+    };
+    const entryRows = rows.map(r => r.single ? singleRow(r.single.e, entries.indexOf(r.single.e)) : groupRow(r)).join('');
 
     return `<div class="history-day">
       <div class="history-day-header" data-role="hist-toggle" data-target="hday-${di}">
@@ -4899,6 +4964,7 @@ async function renderHistory() {
   list.querySelectorAll('[data-role="hist-toggle"]').forEach(header => {
     header.addEventListener('click', () => toggleHistoryDay(header.dataset.target));
   });
+  wireGroupToggles(list);
   applyHistorySearch(); // keep an active search applied after edits/deletes re-render the list
 }
 
@@ -4940,11 +5006,12 @@ async function deleteHistoryEntry(btn) {
     } catch(e) {}
   }
 
-  const entryEl = btn.closest('.history-entry');
-  const dayEl = btn.closest('.history-day');
-  entryEl.remove();
-  // If that was the last entry for the day, remove the whole day card
-  if (dayEl && dayEl.querySelectorAll('.history-entry').length === 0) dayEl.remove();
+  // Re-render instead of just removing the row: other rows remember their position in the day's list
+  // (data-idx), and with sets grouped it's easy to delete several in a row — stale positions would
+  // make the second delete hit the wrong entry. Days you had open stay open.
+  const openDays = [...document.querySelectorAll('#historyList .history-day-entries.open')].map(el => el.id);
+  await renderHistory();
+  openDays.forEach(id => document.getElementById(id)?.classList.add('open'));
 }
 
 async function editHistoryEntry(btn) {
@@ -5088,6 +5155,90 @@ function setCustomCats(cats, gridId = 'customCatGrid') {
   const list = want.length ? want : ['Cardio'];
   document.querySelectorAll('#' + gridId + ' .cat-chip').forEach(b => b.classList.toggle('active', list.includes(b.dataset.cat)));
 }
+// ── Categories (all of an exercise's tags, not just the first) ──
+// Looks the exercise up by name so old log entries show its current tags; an exercise that's been
+// deleted falls back to the single category saved on the entry.
+function categoriesFor(name, fallbackCat) {
+  const ex = EXERCISES.find(e => e.name === name);
+  if (ex) return getExerciseCategories(ex);
+  return fallbackCat ? [fallbackCat] : [];
+}
+function catDotsHtml(cats, extraClass = '') {
+  const list = cats.length ? cats : [''];
+  return `<span class="cat-dots" title="${escapeHtml(cats.join(' · '))}">` +
+    list.map(c => `<span class="log-dot${extraClass}" style="background:${CATEGORY_COLORS[c] || '#60a5fa'}"></span>`).join('') + `</span>`;
+}
+function catPillsHtml(ex) {
+  return `<span class="picker-cats">` + getExerciseCategories(ex).map(c =>
+    `<span class="editor-item-cat" style="background:${CATEGORY_COLORS[c] || '#60a5fa'}">${escapeHtml(c)}</span>`).join('') + `</span>`;
+}
+
+// ── Grouping a day's log: one row per exercise, sets inside ──
+const _openGroups = new Set(); // which grouped rows are expanded (kept across re-renders)
+
+function durText(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return [h ? `${h}h` : '', m ? `${m}m` : '', s ? `${s}s` : ''].filter(Boolean).join(' ');
+}
+// Same text the single rows always showed
+function formatDetail(d) {
+  if (!d) return '';
+  const parts = [];
+  if (d.duration_seconds) parts.push(durText(d.duration_seconds));
+  else if (d.reps) parts.push(d.sets > 1 ? `${d.sets}×${d.reps}` : d.reps);
+  if (d.weight > 0) parts.push(`${d.weight}kg`);
+  return parts.join(' · ');
+}
+// "12 · 10 · 8 · 20kg" — weight once when every set used the same, per set when it changed
+function formatSetsSummary(entries) {
+  const toks = [], ws = [];
+  entries.forEach(e => {
+    const d = e.detail; if (!d) return;
+    let t = '', w = 0;
+    if (d.duration_seconds) { t = durText(d.duration_seconds); w = d.weight > 0 ? d.weight : 0; }
+    else if (d.reps) { t = d.sets > 1 ? `${d.sets}×${d.reps}` : String(d.reps); w = d.weight > 0 ? d.weight : 0; }
+    else if (d.weight > 0) t = `${d.weight}kg`;
+    if (t) { toks.push(t); ws.push(w); }
+  });
+  if (!toks.length) return '';
+  if (ws.every(w => w === ws[0])) return toks.join(' · ') + (ws[0] > 0 ? ` · ${ws[0]}kg` : '');
+  return toks.map((t, i) => ws[i] > 0 ? `${t} (${ws[i]}kg)` : t).join(' · ');
+}
+// items: [{ e: entry, idx: position in the day's array }] newest first. Skipped entries stay on their
+// own; everything else done for the same exercise that day joins one group (Set 1 = the oldest).
+function groupEntriesByExercise(items) {
+  const rows = [], byName = new Map();
+  items.forEach((it, pos) => {
+    it.pos = pos;
+    if (it.e.how === 'skip') { rows.push({ single: it }); return; }
+    let g = byName.get(it.e.name);
+    if (!g) { g = { name: it.e.name, items: [] }; byName.set(it.e.name, g); rows.push(g); }
+    g.items.push(it);
+  });
+  const t = it => it.e.loggedAt ? Date.parse(it.e.loggedAt) : (it.e.date instanceof Date ? it.e.date.getTime() : NaN);
+  return rows.map(r => {
+    if (!r.items) return r;
+    if (r.items.length === 1) return { single: r.items[0] };
+    const timed = r.items.every(it => Number.isFinite(t(it)));
+    r.items = timed ? [...r.items].sort((a, b) => (t(a) - t(b)) || (b.pos - a.pos)) : [...r.items].reverse();
+    return r;
+  });
+}
+function groupTags(items) {
+  const hows = new Set(items.map(i => i.e.how));
+  return (hows.has('manual') ? '<span class="tag-badge">manual</span>' : '') +
+         (hows.has('repeat') ? '<span class="tag-badge" title="Kept in queue to do again today">repeat</span>' : '');
+}
+function wireGroupToggles(container) {
+  container.querySelectorAll('[data-role="group-toggle"]').forEach(h => {
+    h.addEventListener('click', () => {
+      const g = h.closest('.log-group, .history-group');
+      const open = g.classList.toggle('open');
+      if (open) _openGroups.add(h.dataset.gkey); else _openGroups.delete(h.dataset.gkey);
+    });
+  });
+}
+
 // ── Exercise icons ──
 function exerciseIcon(name) {
   const ex = EXERCISES.find(e => e.name === name);
@@ -5345,7 +5496,7 @@ function filterPicker(query) {
     const done = doneTodayNames.has(ex.name);
     const safeName = escapeHtml(ex.name);
     return `<div class="picker-item${done ? ' done-today' : ''}" data-exname="${safeName}">
-      <span class="editor-item-cat" style="background:${color}">${escapeHtml(ex.category)}</span>
+      ${catPillsHtml(ex)}
       <span>${ex.icon ? escapeHtml(ex.icon) + ' ' : ''}${safeName}</span>
     </div>`;
   }).join('') + newRow;
