@@ -875,6 +875,19 @@
   .history-entry-detail { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; }
   .history-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px; }
   .history-list { max-height: 65vh; overflow-y: auto; }
+  .totals-ranges { margin: 2px 0 10px; }
+  .totals-custom { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; color: var(--muted); }
+  .totals-custom input {
+    flex: 1; min-width: 0; background: var(--surface2); border: 1px solid #2a2d35; border-radius: 8px;
+    color: var(--text); font-family: 'Space Grotesk', sans-serif; font-size: 13px; padding: 8px 10px;
+    outline: none; color-scheme: dark;
+  }
+  .totals-summary { font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
+  .totals-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--surface2); }
+  .totals-row:last-child { border-bottom: none; }
+  .totals-name { flex: 1; min-width: 0; font-size: 14px; color: var(--text); }
+  .totals-sub { display: block; font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .totals-main { font-family: 'Space Mono', monospace; font-size: 14px; color: var(--accent2); text-align: right; white-space: nowrap; }
 
   /* ── Records modal ── */
   .records-cat-header {
@@ -1273,7 +1286,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.83</div>
+    <div class="app-version">v0.84</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -1454,9 +1467,28 @@
         <button class="btn-danger" data-action="confirmClearOldHistory">Yes, clear local cache</button>
       </div>
     </div>
+    <div class="picker-tabs">
+      <button class="picker-tab active" id="histModeDays">Days</button>
+      <button class="picker-tab" id="histModeTotals">Totals</button>
+    </div>
     <input type="search" class="picker-search" id="historySearch" placeholder="Search history…" autocomplete="off" enterkeyhint="search" />
     <div class="history-list" id="historyList"></div>
     <div class="history-empty" id="historyNoMatch" style="display:none">No matching entries</div>
+    <!-- Totals: how much of each exercise you've done in a time frame -->
+    <div id="totalsPanel" style="display:none">
+      <div class="cat-grid totals-ranges" id="totalsRanges">
+        <button type="button" class="cat-chip" data-range="week">This week</button>
+        <button type="button" class="cat-chip" data-range="month">This month</button>
+        <button type="button" class="cat-chip active" data-range="year">This year</button>
+        <button type="button" class="cat-chip" data-range="all">All time</button>
+        <button type="button" class="cat-chip" data-range="custom">Custom</button>
+      </div>
+      <div class="totals-custom" id="totalsCustom" style="display:none">
+        <input type="date" id="totalsFrom" aria-label="From" /><span>–</span><input type="date" id="totalsTo" aria-label="To" />
+      </div>
+      <div class="totals-summary" id="totalsSummary"></div>
+      <div class="history-list" id="totalsList"></div>
+    </div>
   </div>
 </div>
 
@@ -2806,6 +2838,93 @@ function mergeRecentSets(local, cloud) {
   const needsPush = Object.keys(local).some(name => !cloud[name] || local[name].at > cloud[name].at)
     || Object.keys(cloud).length === 0 && Object.keys(local).length > 0;
   return { merged, needsPush };
+}
+
+// ── Learning "last time" from your existing history ──
+// The remembered values used to be filled in only by logs made after that feature existed, so an
+// exercise you hadn't logged since had nothing to prefill. These read the log you already have
+// (this phone's saved days, then the cloud log) and take the most recent *batch* for each exercise:
+// the sets saved together — they're stamped a few milliseconds apart — or one older multi-set entry.
+// entries: [{ name, atMs, detail: { reps, sets, weight, duration_seconds } }]
+function seedRecentSetsFrom(entries) {
+  const byName = new Map();
+  entries.forEach(en => {
+    const d = en.detail;
+    if (!en.name || !d || !(d.reps || d.duration_seconds) || !Number.isFinite(en.atMs)) return;
+    if (!byName.has(en.name)) byName.set(en.name, []);
+    byName.get(en.name).push(en);
+  });
+  let changed = false;
+  byName.forEach((list, name) => {
+    list.sort((a, b) => b.atMs - a.atMs);                       // newest first
+    const newest = list[0].atMs;
+    const prev = recentSets[name];
+    if (prev && prev.at >= newest) return;                      // what we already remember is as new or newer
+    const batch = list.filter(en => newest - en.atMs <= 5000).sort((a, b) => a.atMs - b.atMs); // Set 1..n
+    const repSets = [], durSets = [];
+    batch.forEach(en => {
+      const d = en.detail, w = d.weight > 0 ? Number(d.weight) : 0;
+      if (d.reps) {
+        const n = Math.min(d.sets > 1 ? d.sets : 1, 10);       // an old "3×12" entry = three sets of 12
+        for (let i = 0; i < n; i++) repSets.push({ reps: String(d.reps), weight: w });
+      }
+      if (d.duration_seconds) durSets.push({ duration_seconds: d.duration_seconds, weight: w });
+    });
+    if (!repSets.length && !durSets.length) return;
+    recentSets[name] = {
+      repSets: repSets.length ? repSets : (prev ? prev.repSets : []),
+      durSets: durSets.length ? durSets : (prev ? prev.durSets : []),
+      at: newest,
+    };
+    changed = true;
+  });
+  return changed;
+}
+
+function seedRecentSetsFromLocal() {
+  const entries = [], seen = new Set();
+  getAllDayKeys().forEach(key => {
+    let log;
+    try { log = (JSON.parse(localStorage.getItem(key)) || {}).log; } catch(e) { return; }
+    if (!Array.isArray(log)) return;
+    const n = parseInt(key.replace('wbw_', ''));
+    const y = Math.floor(n / 10000), mo = Math.floor((n % 10000) / 100), da = n % 100;
+    log.forEach(e => {
+      if (!e || e.how === 'skip' || e.how === 'record') return;
+      let atMs = e.loggedAt ? Date.parse(e.loggedAt) : NaN;
+      if (!Number.isFinite(atMs) && e.time) {                    // older entries: day + the HH:MM they were saved with
+        const [hh, mm] = String(e.time).split(':').map(Number);
+        if (Number.isFinite(hh) && Number.isFinite(mm)) atMs = new Date(y, mo - 1, da, hh, mm).getTime();
+      }
+      const sig = `${e.name}|${atMs}|${JSON.stringify(e.detail)}`;
+      if (seen.has(sig)) return;
+      seen.add(sig);
+      entries.push({ name: e.name, atMs, detail: e.detail });
+    });
+  });
+  return seedRecentSetsFrom(entries);
+}
+
+async function seedRecentSetsFromHistory() {
+  let changed = seedRecentSetsFromLocal();
+  if (currentUser && sb) {
+    try {
+      const { data, error } = await sb.from('workout_log')
+        .select('exercise_name, how, reps, sets, weight, duration_seconds, logged_at')
+        .eq('user_id', currentUser.id)
+        .neq('how', 'record')
+        .neq('how', 'skip')
+        .order('logged_at', { ascending: false })
+        .limit(1000);
+      if (!error && Array.isArray(data)) {
+        changed = seedRecentSetsFrom(data
+          .filter(r => r.how !== 'skip' && r.how !== 'record')
+          .map(r => ({ name: r.exercise_name, atMs: Date.parse(r.logged_at),
+            detail: { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds } }))) || changed;
+      }
+    } catch(e) { console.error('seedRecentSetsFromHistory error:', e); }
+  }
+  if (changed) persistRecentSets();
 }
 
 // Loads recent-sets from the DB on sign-in so "what did I do last time" works
@@ -4409,9 +4528,158 @@ function addExercise() {
 }
 
 // ── History ──
+// ── Totals (how many push-ups since the start of the year, etc.) ──
+let _histMode = 'days';
+const _totals = { range: 'year', from: '', to: '', rows: [], label: '', token: 0 };
+
+function setHistoryMode(mode) {
+  _histMode = mode;
+  const totals = mode === 'totals';
+  document.getElementById('histModeDays').classList.toggle('active', !totals);
+  document.getElementById('histModeTotals').classList.toggle('active', totals);
+  document.getElementById('historyList').style.display = totals ? 'none' : '';
+  document.getElementById('totalsPanel').style.display = totals ? '' : 'none';
+  document.getElementById('historySearch').placeholder = totals ? 'Search an exercise…' : 'Search history…';
+  if (totals) { document.getElementById('historyNoMatch').style.display = 'none'; renderTotals(); }
+  else applyHistorySearch();
+}
+
+function totalsBounds() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  let from = null, to = endOfDay(now);
+  if (_totals.range === 'week') { from = new Date(today); from.setDate(today.getDate() - ((today.getDay() + 6) % 7)); }   // Monday
+  else if (_totals.range === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1);
+  else if (_totals.range === 'year') from = new Date(now.getFullYear(), 0, 1);
+  else if (_totals.range === 'custom') {
+    from = _totals.from ? new Date(_totals.from + 'T00:00:00') : null;
+    to = _totals.to ? new Date(_totals.to + 'T23:59:59.999') : endOfDay(now);
+  }
+  return { from, to };
+}
+function totalsRangeLabel({ from, to }) {
+  const f = d => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  if (!from) return _totals.range === 'all' ? 'All time' : `Until ${f(to)}`;
+  return `${f(from)} – ${endOfToday(to) ? 'today' : f(to)}`;
+}
+function endOfToday(d) { const n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); }
+
+// Everything logged in the range: the whole cloud log (fetched a page at a time — one request only
+// returns 1000 rows, which a year of sets can pass), plus entries on this phone that haven't
+// reached the cloud yet (today only, as in History). Skips and highscore edits aren't workouts, so they're left out.
+async function fetchTotalsEntries(from, to) {
+  const out = [];
+  const inRange = ms => Number.isFinite(ms) && (!from || ms >= from.getTime()) && (!to || ms <= to.getTime());
+  if (currentUser && sb) {
+    const PAGE = 1000;
+    for (let start = 0; ; start += PAGE) {
+      let q = sb.from('workout_log')
+        .select('exercise_name, how, reps, sets, weight, duration_seconds, logged_at')
+        .eq('user_id', currentUser.id).neq('how', 'record').neq('how', 'skip');
+      if (from) q = q.gte('logged_at', from.toISOString());
+      if (to) q = q.lte('logged_at', to.toISOString());
+      const { data, error } = await q.order('logged_at', { ascending: false }).order('id', { ascending: false }).range(start, start + PAGE - 1);
+      if (error) throw new Error(error.message);
+      (data || []).forEach(r => {
+        if (r.how === 'skip' || r.how === 'record') return;
+        out.push({ name: r.exercise_name, atMs: Date.parse(r.logged_at),
+          detail: { reps: r.reps, sets: r.sets, weight: r.weight, duration_seconds: r.duration_seconds } });
+      });
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  // The phone also keeps copies of cloud days (without ids), so past days must come from the cloud alone —
+  // like the History list — or everything would count twice. Today's entries that never got an id
+  // haven't reached the cloud yet, so those are added. (Signed out, the saved days are all there is.)
+  const todayKey = getTodayKey();
+  getAllDayKeys().forEach(key => {
+    if (currentUser && key !== todayKey) return;
+    let log;
+    try { log = (JSON.parse(localStorage.getItem(key)) || {}).log; } catch(e) { return; }
+    if (!Array.isArray(log)) return;
+    const n = parseInt(key.replace('wbw_', ''));
+    const y = Math.floor(n / 10000), mo = Math.floor((n % 10000) / 100), da = n % 100;
+    log.forEach(e => {
+      if (!e || e.how === 'skip' || e.how === 'record') return;
+      if (currentUser && e.id) return;                       // already counted from the cloud
+      let atMs = e.loggedAt ? Date.parse(e.loggedAt) : NaN;
+      if (!Number.isFinite(atMs)) {
+        const [hh, mm] = String(e.time || '').split(':').map(Number);
+        atMs = new Date(y, mo - 1, da, Number.isFinite(hh) ? hh : 12, Number.isFinite(mm) ? mm : 0).getTime();
+      }
+      if (inRange(atMs)) out.push({ name: e.name, atMs, detail: e.detail });
+    });
+  });
+  return out;
+}
+
+function aggregateTotals(entries) {
+  const map = new Map();
+  entries.forEach(en => {
+    if (!en.name) return;
+    let r = map.get(en.name);
+    if (!r) { r = { name: en.name, entries: 0, sets: 0, reps: 0, secs: 0, volume: 0, days: new Set() }; map.set(en.name, r); }
+    const d = en.detail || {};
+    const nSets = d.sets > 1 ? d.sets : 1;
+    const reps = parseInt(d.reps) || 0, w = d.weight > 0 ? Number(d.weight) : 0;
+    r.entries++;
+    r.sets += nSets;
+    r.reps += reps * nSets;
+    r.secs += d.duration_seconds || 0;
+    if (reps && w) r.volume += reps * nSets * w;
+    const dt = new Date(en.atMs);
+    r.days.add(`${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`);
+  });
+  return [...map.values()].sort((a, b) => (b.reps - a.reps) || (b.secs - a.secs) || (b.entries - a.entries) || a.name.localeCompare(b.name));
+}
+
+function renderTotalsList() {
+  const list = document.getElementById('totalsList');
+  const q = document.getElementById('historySearch').value.trim().toLowerCase();
+  const rows = _totals.rows.filter(r => !q || r.name.toLowerCase().includes(q));
+  const days = new Set(); let sets = 0;
+  rows.forEach(r => { sets += r.sets; r.days.forEach(d => days.add(d)); });
+  document.getElementById('totalsSummary').textContent = rows.length
+    ? `${_totals.label} · ${rows.length} exercise${rows.length === 1 ? '' : 's'} · ${sets.toLocaleString()} sets · ${days.size} active day${days.size === 1 ? '' : 's'}`
+    : _totals.label;
+  if (!rows.length) { list.innerHTML = `<div class="history-empty">${_totals.rows.length ? 'No matching exercises' : 'Nothing logged in this time frame'}</div>`; return; }
+  list.innerHTML = rows.map(r => {
+    const main = [];
+    if (r.reps) main.push(`${r.reps.toLocaleString()} reps`);
+    if (r.secs) main.push(durText(r.secs));
+    if (!main.length) main.push(`${r.entries}× done`);
+    const sub = [`${r.sets.toLocaleString()} set${r.sets === 1 ? '' : 's'}`, `${r.days.size} day${r.days.size === 1 ? '' : 's'}`];
+    if (r.volume) sub.push(`${Math.round(r.volume).toLocaleString()} kg lifted`);
+    return `<div class="totals-row">
+      <div class="totals-name">${iconPrefix(r.name)}${escapeHtml(r.name)}<span class="totals-sub">${sub.join(' · ')}</span></div>
+      <div class="totals-main">${main.join('<br>')}</div>
+    </div>`;
+  }).join('');
+}
+
+async function renderTotals() {
+  const token = ++_totals.token;
+  const bounds = totalsBounds();
+  _totals.label = totalsRangeLabel(bounds);
+  document.getElementById('totalsSummary').textContent = _totals.label;
+  document.getElementById('totalsList').innerHTML = '<div class="history-empty">Loading…</div>';
+  try {
+    const entries = await fetchTotalsEntries(bounds.from, bounds.to);
+    if (token !== _totals.token) return;                    // a newer request replaced this one
+    _totals.rows = aggregateTotals(entries);
+    renderTotalsList();
+  } catch(e) {
+    if (token !== _totals.token) return;
+    console.error('renderTotals error:', e);
+    document.getElementById('totalsList').innerHTML = '<div class="history-empty">Couldn\'t load totals — check your connection and try again</div>';
+  }
+}
+
 function openHistory() {
   const search = document.getElementById('historySearch');
   if (search) search.value = '';
+  setHistoryMode('days');
   document.getElementById('historyNoMatch').style.display = 'none';
   renderHistory();
   document.getElementById('historyModal').classList.add('open');
@@ -4427,6 +4695,7 @@ function applyHistorySearch() {
   const noMatch = document.getElementById('historyNoMatch');
   if (!input || !list) return;
   const q = input.value.trim().toLowerCase();
+  if (q) ensureAllHistoryDaysRendered();   // days are drawn lazily — a search has to see them all
   const dayEls = list.querySelectorAll('.history-day');
   let anyMatch = false;
 
@@ -4822,20 +5091,37 @@ function showRecErr(i, msg) {
   el.style.display = '';
 }
 
+// ── History ──
+// The whole log is loaded (a page of 1000 at a time — the cloud never returns more than that per
+// request), but a day's rows are only drawn when that day is opened. Searching draws them all once.
+let _historyRenderToken = 0;
+const _historyDays = {};   // dayKey -> entries (newest first), kept so a day can be drawn on demand
+
 async function renderHistory() {
+  const token = ++_historyRenderToken;
   const list = document.getElementById('historyList');
   list.innerHTML = '<div class="history-empty">Loading…</div>';
 
   let allEntries = [];
+  let partial = false;
   if (currentUser) {
     try {
-      const { data } = await sb.from('workout_log')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .neq('how', 'record')
-        .order('logged_at', { ascending: false });
-      if (data) allEntries = data
-        .map(r => ({
+      const PAGE = 1000, raw = [];
+      for (let start = 0; ; start += PAGE) {
+        const { data, error } = await sb.from('workout_log')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .neq('how', 'record')
+          .order('logged_at', { ascending: false })
+          .order('id', { ascending: false })           // stable order, so rows can't repeat or vanish at a page edge
+          .range(start, start + PAGE - 1);
+        if (token !== _historyRenderToken) return;       // a newer render replaced this one
+        if (error || !data) { if (start > 0) partial = true; break; }
+        raw.push(...data);
+        if (data.length < PAGE) break;
+        list.innerHTML = `<div class="history-empty">Loading… ${raw.length.toLocaleString()} entries</div>`;
+      }
+      allEntries = raw.map(r => ({
         id: r.id,
         name: r.exercise_name,
         category: r.category,
@@ -4846,8 +5132,9 @@ async function renderHistory() {
         date: new Date(r.logged_at),
         time: (() => { const d = new Date(r.logged_at); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); })()
       }));
-    } catch(e) {}
+    } catch(e) { if (token !== _historyRenderToken) return; }
   }
+  if (token !== _historyRenderToken) return;
 
   // Fall back to localStorage if DB empty
   if (allEntries.length === 0) {
@@ -4877,9 +5164,9 @@ async function renderHistory() {
     if (!byDay[key]) byDay[key] = [];
     byDay[key].push(e);
   });
-
-  // Remove days that ended up empty
   Object.keys(byDay).forEach(k => { if (byDay[k].length === 0) delete byDay[k]; });
+  Object.keys(_historyDays).forEach(k => delete _historyDays[k]);
+  Object.assign(_historyDays, byDay);
 
   const days = Object.keys(byDay).sort().reverse();
   list.innerHTML = days.map((dayKey, di) => {
@@ -4901,75 +5188,100 @@ async function renderHistory() {
         : `${days[date.getDay()]}, ${d}.${m}.`;
     }
     const meta = `${done} done${setCount !== done ? ` · ${setCount} sets` : ''}${skipped ? `, ${skipped} skipped` : ''}`;
-    const histBtns = (e, entryIdx) => ({
-      del: `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-delete" title="Delete">×</button>`,
-      edit: e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-edit">edit</button>` : '',
-    });
-    const singleRow = (e, entryIdx) => {
-      const detStr = formatDetail(e.detail);
-      const skipTag = e.how === 'skip' ? '<span class="tag-badge">skipped</span>' : '';
-      const repeatTag = e.how === 'repeat' ? '<span class="tag-badge" title="Kept in queue to do again that day">repeat</span>' : '';
-      const b = histBtns(e, entryIdx);
-      return `<div class="history-entry">
-        ${catDotsHtml(categoriesFor(e.name, e.category), ' history-dot')}
-        <span class="history-entry-name">${iconPrefix(e.name)}${escapeHtml(e.name)}${skipTag}${repeatTag}</span>
-        ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
-        ${b.edit}
-        ${b.del}
-      </div>`;
-    };
-    const groupRow = (g) => {
-      const gkey = `hist|${dayKey}|${g.name}`;
-      const last = g.items[g.items.length - 1].e;
-      const summary = formatSetsSummary(g.items.map(i => i.e));
-      const sets = g.items.map((it, n) => {
-        const b = histBtns(it.e, entries.indexOf(it.e));
-        const d = formatDetail(it.e.detail);
-        return `<div class="history-set">
-          <span class="history-set-label">Set ${n + 1}</span>
-          <span class="history-entry-detail">${d}</span>
-          ${it.e.time ? `<span class="log-time">${it.e.time}</span>` : ''}
-          ${b.edit}
-          ${b.del}
-        </div>`;
-      }).join('');
-      return `<div class="history-group${_openGroups.has(gkey) ? ' open' : ''}">
-        <div class="history-entry history-entry-group" data-role="group-toggle" data-gkey="${escapeHtml(gkey)}">
-          ${catDotsHtml(categoriesFor(g.name, last.category), ' history-dot')}
-          <span class="history-entry-name">${iconPrefix(g.name)}${escapeHtml(g.name)}<span class="set-badge" title="${g.items.length} sets">×${g.items.length}</span>${groupTags(g.items)}</span>
-          ${summary ? `<span class="history-entry-detail">${summary}</span>` : ''}
-          <span class="group-chevron">▸</span>
-        </div>
-        <div class="history-sets">${sets}</div>
-      </div>`;
-    };
-    const entryRows = rows.map(r => r.single ? singleRow(r.single.e, entries.indexOf(r.single.e)) : groupRow(r)).join('');
-
-    return `<div class="history-day">
+    return `<div class="history-day" data-daykey="${dayKey}">
       <div class="history-day-header" data-role="hist-toggle" data-target="hday-${di}">
         <span class="history-day-title">${label}</span>
         <span class="history-day-meta">${meta}</span>
       </div>
-      <div class="history-day-entries${di === 0 ? ' open' : ''}" id="hday-${di}">${entryRows}</div>
+      <div class="history-day-entries${di === 0 ? ' open' : ''}" id="hday-${di}" data-daykey="${dayKey}"></div>
     </div>`;
-  }).join('');
+  }).join('') + (partial ? '<div class="history-empty">Older days couldn\'t be loaded — close and reopen History to try again</div>' : '');
 
-  // CSP-safe: wire click handlers instead of inline onclick
-  list.querySelectorAll('[data-role="hist-delete"]').forEach(btn => {
-    btn.addEventListener('click', () => deleteHistoryEntry(btn));
-  });
-  list.querySelectorAll('[data-role="hist-edit"]').forEach(btn => {
-    btn.addEventListener('click', () => editHistoryEntry(btn));
-  });
   list.querySelectorAll('[data-role="hist-toggle"]').forEach(header => {
     header.addEventListener('click', () => toggleHistoryDay(header.dataset.target));
   });
-  wireGroupToggles(list);
+  const first = list.querySelector('.history-day-entries.open');
+  if (first) ensureDayRendered(first);
   applyHistorySearch(); // keep an active search applied after edits/deletes re-render the list
 }
 
+// Draws one day's rows (once) and wires their buttons.
+function ensureDayRendered(box) {
+  if (!box || box.dataset.rendered) return;
+  const dayKey = box.dataset.daykey;
+  const entries = _historyDays[dayKey];
+  if (!entries) return;
+  box.dataset.rendered = '1';
+
+  const rows = groupEntriesByExercise(entries.map((e, idx) => ({ e, idx })));
+  const histBtns = (e, entryIdx) => ({
+    del: `<button class="history-del" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-delete" title="Delete">×</button>`,
+    edit: e.how !== 'skip' ? `<button class="log-again" data-dbid="${e.id || ''}" data-daykey="${dayKey}" data-idx="${entryIdx}" data-role="hist-edit">edit</button>` : '',
+  });
+  const singleRow = (e, entryIdx) => {
+    const detStr = formatDetail(e.detail);
+    const skipTag = e.how === 'skip' ? '<span class="tag-badge">skipped</span>' : '';
+    const repeatTag = e.how === 'repeat' ? '<span class="tag-badge" title="Kept in queue to do again that day">repeat</span>' : '';
+    const b = histBtns(e, entryIdx);
+    return `<div class="history-entry">
+      ${catDotsHtml(categoriesFor(e.name, e.category), ' history-dot')}
+      <span class="history-entry-name">${iconPrefix(e.name)}${escapeHtml(e.name)}${skipTag}${repeatTag}</span>
+      ${detStr ? `<span class="history-entry-detail">${detStr}</span>` : ''}
+      ${b.edit}
+      ${b.del}
+    </div>`;
+  };
+  const groupRow = (g) => {
+    const gkey = `hist|${dayKey}|${g.name}`;
+    const last = g.items[g.items.length - 1].e;
+    const summary = formatSetsSummary(g.items.map(i => i.e));
+    const sets = g.items.map((it, n) => {
+      const b = histBtns(it.e, entries.indexOf(it.e));
+      const d = formatDetail(it.e.detail);
+      return `<div class="history-set">
+        <span class="history-set-label">Set ${n + 1}</span>
+        <span class="history-entry-detail">${d}</span>
+        ${it.e.time ? `<span class="log-time">${it.e.time}</span>` : ''}
+        ${b.edit}
+        ${b.del}
+      </div>`;
+    }).join('');
+    return `<div class="history-group${_openGroups.has(gkey) ? ' open' : ''}">
+      <div class="history-entry history-entry-group" data-role="group-toggle" data-gkey="${escapeHtml(gkey)}">
+        ${catDotsHtml(categoriesFor(g.name, last.category), ' history-dot')}
+        <span class="history-entry-name">${iconPrefix(g.name)}${escapeHtml(g.name)}<span class="set-badge" title="${g.items.length} sets">×${g.items.length}</span>${groupTags(g.items)}</span>
+        ${summary ? `<span class="history-entry-detail">${summary}</span>` : ''}
+        <span class="group-chevron">▸</span>
+      </div>
+      <div class="history-sets">${sets}</div>
+    </div>`;
+  };
+  box.innerHTML = rows.map(r => r.single ? singleRow(r.single.e, entries.indexOf(r.single.e)) : groupRow(r)).join('');
+
+  box.querySelectorAll('[data-role="hist-delete"]').forEach(btn => btn.addEventListener('click', () => deleteHistoryEntry(btn)));
+  box.querySelectorAll('[data-role="hist-edit"]').forEach(btn => btn.addEventListener('click', () => editHistoryEntry(btn)));
+  wireGroupToggles(box);
+}
+
+function ensureAllHistoryDaysRendered() {
+  document.querySelectorAll('#historyList .history-day-entries').forEach(ensureDayRendered);
+}
+
+// Re-draw after an edit/delete (other rows remember their position in the day, so they must be fresh)
+// while keeping the days you had open.
+async function reRenderHistoryKeepingOpenDays() {
+  const open = [...document.querySelectorAll('#historyList .history-day-entries.open')].map(el => el.dataset.daykey);
+  await renderHistory();
+  open.forEach(dk => {
+    const box = document.querySelector(`#historyList .history-day-entries[data-daykey="${dk}"]`);
+    if (box) { box.classList.add('open'); ensureDayRendered(box); }
+  });
+}
+
 function toggleHistoryDay(id) {
-  document.getElementById(id).classList.toggle('open');
+  const box = document.getElementById(id);
+  const open = box.classList.toggle('open');
+  if (open) ensureDayRendered(box);
 }
 
 async function deleteHistoryEntry(btn) {
@@ -5009,9 +5321,7 @@ async function deleteHistoryEntry(btn) {
   // Re-render instead of just removing the row: other rows remember their position in the day's list
   // (data-idx), and with sets grouped it's easy to delete several in a row — stale positions would
   // make the second delete hit the wrong entry. Days you had open stay open.
-  const openDays = [...document.querySelectorAll('#historyList .history-day-entries.open')].map(el => el.id);
-  await renderHistory();
-  openDays.forEach(id => document.getElementById(id)?.classList.add('open'));
+  await reRenderHistoryKeepingOpenDays();
 }
 
 async function editHistoryEntry(btn) {
@@ -5120,7 +5430,7 @@ async function editHistoryEntry(btn) {
 
     notify(`✓ Updated — ${entry.name}${logDateSuffix(loggedAt)}`);
     // Re-render history to reflect new detail string
-    renderHistory();
+    reRenderHistoryKeepingOpenDays();
   }, { ...entry.detail, loggedAt: entry.loggedAt }, null, false);
 }
 function openManualLog() {
@@ -5643,7 +5953,7 @@ async function initApp() {
       return importHighscoreActivitiesOnce();
     })
     .catch(e => console.error('one-time exercise cleanup failed:', e));
-  loadRecentSetsFromDB();
+  loadRecentSetsFromDB().then(seedRecentSetsFromHistory).catch(e => console.error('recent-sets setup failed:', e));
   rebuildQueue();
   loadState();
   await loadQueueStateFromDB(); // may resume today's position/streak/skips from another device
@@ -5811,7 +6121,31 @@ function bindStaticButtons() {
 
   $('recPickerSearch')?.addEventListener('input', e => filterRecordPicker(e.target.value));
   $('pickerSearch')   ?.addEventListener('input', e => filterPicker(e.target.value));
-  $('historySearch')  ?.addEventListener('input', applyHistorySearch);
+  $('historySearch')  ?.addEventListener('input', () => { if (_histMode === 'totals') renderTotalsList(); else applyHistorySearch(); });
+  $('histModeDays')   ?.addEventListener('click', () => setHistoryMode('days'));
+  $('histModeTotals') ?.addEventListener('click', () => setHistoryMode('totals'));
+  document.querySelectorAll('#totalsRanges .cat-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _totals.range = btn.dataset.range;
+      document.querySelectorAll('#totalsRanges .cat-chip').forEach(b => b.classList.toggle('active', b === btn));
+      const custom = _totals.range === 'custom';
+      document.getElementById('totalsCustom').style.display = custom ? '' : 'none';
+      if (custom) {
+        const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const now = new Date();
+        if (!_totals.from) _totals.from = iso(new Date(now.getFullYear(), 0, 1));
+        if (!_totals.to) _totals.to = iso(now);
+        document.getElementById('totalsFrom').value = _totals.from;
+        document.getElementById('totalsTo').value = _totals.to;
+        document.getElementById('totalsTo').max = iso(now);
+      }
+      renderTotals();
+    });
+  });
+  ['totalsFrom', 'totalsTo'].forEach(id => $(id)?.addEventListener('change', () => {
+    _totals.from = $('totalsFrom').value; _totals.to = $('totalsTo').value;
+    if (_totals.range === 'custom') renderTotals();
+  }));
 
   $('pickerBack')?.addEventListener('click', () => { switchPickerTab('list'); autoFocus($('pickerSearch')); });
 
