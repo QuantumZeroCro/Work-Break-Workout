@@ -947,6 +947,17 @@
     background: var(--accent); color: #fff; border: none;
     border-radius: 6px; padding: 5px 14px; font-size: 12px; cursor: pointer;
   }
+  .record-edit-remove {
+    background: none; border: 1px solid rgba(248,113,113,0.45); color: #f87171;
+    border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; margin-right: auto;
+  }
+  .record-edit-remove:hover { background: rgba(248,113,113,0.1); }
+  .record-edit-remove-yes { margin-right: 0; }
+  .record-remove-confirm {
+    display: none; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
+    font-size: 12px; color: var(--text-dim); margin-top: 2px;
+  }
+  .record-remove-confirm span { margin-right: auto; }
   .record-edit-cancel {
     background: none; border: 1px solid var(--surface2); color: var(--text-dim);
     border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer;
@@ -1286,7 +1297,7 @@
 <header>
   <div>
     <h1>Work Break Workout</h1>
-    <div class="app-version">v0.84</div>
+    <div class="app-version">v0.85</div>
   </div>
   <button class="btn-signout" id="btnSignOut" aria-label="Sign out">Sign out</button>
 </header>
@@ -4974,9 +4985,15 @@ async function loadRecordsFromDB() {
             <span style="color:var(--text-dim);font-size:12px">kg</span>
           </div>
           <div id="rec-err-${i}" style="display:none;font-size:11px;color:#f87171;margin-top:2px;"></div>
-          <div class="record-edit-actions">
+          <div class="record-edit-actions" id="rec-actions-${i}">
+            <button class="record-edit-remove" data-role="rec-remove" data-i="${i}" title="Remove this highscore">Remove</button>
             <button class="record-edit-cancel" data-role="rec-cancel" data-i="${i}">Cancel</button>
             <button class="record-edit-save" id="rec-save-${i}" data-role="rec-save" data-i="${i}">Save</button>
+          </div>
+          <div class="record-remove-confirm" id="rec-confirm-${i}">
+            <span>Remove this highscore?</span>
+            <button class="record-edit-cancel" data-role="rec-remove-no" data-i="${i}">No</button>
+            <button class="record-edit-remove record-edit-remove-yes" id="rec-remove-yes-${i}" data-role="rec-remove-yes" data-i="${i}">Yes, remove</button>
           </div>
         </div>`;
     }).join('');
@@ -4993,6 +5010,15 @@ async function loadRecordsFromDB() {
     });
     list.querySelectorAll('[data-role="rec-save"]').forEach(btn => {
       btn.addEventListener('click', () => saveRecordEdit(parseInt(btn.dataset.i)));
+    });
+    list.querySelectorAll('[data-role="rec-remove"]').forEach(btn => {
+      btn.addEventListener('click', () => askRemoveRecord(parseInt(btn.dataset.i), true));
+    });
+    list.querySelectorAll('[data-role="rec-remove-no"]').forEach(btn => {
+      btn.addEventListener('click', () => askRemoveRecord(parseInt(btn.dataset.i), false));
+    });
+    list.querySelectorAll('[data-role="rec-remove-yes"]').forEach(btn => {
+      btn.addEventListener('click', () => removeRecord(parseInt(btn.dataset.i)));
     });
   } catch(e) {
     console.error('records error:', e);
@@ -5081,6 +5107,39 @@ async function saveRecordEdit(i) {
     console.error('saveRecordEdit error:', e);
     showRecErr(i, e?.message || 'Save failed — check console.');
     saveBtn.textContent = 'Save'; saveBtn.disabled = false;
+  }
+}
+
+// Shows / hides the "Remove this highscore?" confirmation in place of Cancel/Save
+function askRemoveRecord(i, ask) {
+  document.getElementById(`rec-actions-${i}`).style.display = ask ? 'none' : '';
+  document.getElementById(`rec-confirm-${i}`).style.display = ask ? 'flex' : 'none';
+}
+
+// Deletes this exercise's whole highscore (reps, duration and weight bests). It simply starts over:
+// the next time you log the exercise, that result becomes its new highscore.
+async function removeRecord(i) {
+  const form = document.getElementById(`rec-form-${i}`);
+  const btn  = document.getElementById(`rec-remove-yes-${i}`);
+  const name = form.dataset.name;
+  document.getElementById(`rec-err-${i}`).style.display = 'none';
+  btn.textContent = 'Removing…'; btn.disabled = true;
+  try {
+    const { error } = await sb.from('personal_records')
+      .delete()
+      .eq('user_id', currentUser.id)
+      .eq('exercise_name', name);
+    if (error) throw error;
+    delete personalRecords[name];
+    _pendingRecordPush.delete(name);
+    updateExerciseDisplay();        // the card under the timer shows the current exercise's best
+    await loadRecordsFromDB();
+    notify(`Removed ${name} from highscores`);
+  } catch(e) {
+    console.error('removeRecord error:', e);
+    showRecErr(i, e?.message || 'Remove failed — try again.');
+    btn.textContent = 'Yes, remove'; btn.disabled = false;
+    askRemoveRecord(i, false);
   }
 }
 
